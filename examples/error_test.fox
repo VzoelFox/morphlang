@@ -1,0 +1,16 @@
+# error_test.fox
+
+# 1. Syntax Error: Missing whitespace around +
+a = 10+5
+
+# 2. Function returning error
+fungsi bagi(x, y)
+  jika y == 0
+    kembalikan galat("Zero division")
+  akhir
+  kembalikan x / y
+akhir
+
+# 3. Warning test: Unchecked error
+hasil = bagi(10, 0)
+cetak(hasil)
