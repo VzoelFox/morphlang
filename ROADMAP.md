@@ -57,19 +57,19 @@ morph/
 ├── test/
 │   ├── fixtures/           # Test morph programs
 │   │   ├── valid/
-│   │   │   ├── hello.morph
-│   │   │   ├── fibonacci.morph
+│   │   │   ├── hello.fox
+│   │   │   ├── fibonacci.fox
 │   │   │   └── ...
 │   │   └── invalid/
-│   │       ├── syntax_error_1.morph
+│   │       ├── syntax_error_1.fox
 │   │       └── ...
 │   │
 │   └── integration/        # Integration tests
 │       └── ...
 │
 ├── examples/               # Example programs
-│   ├── hello_world.morph
-│   ├── calculator.morph
+│   ├── hello_world.fox
+│   ├── calculator.fox
 │   └── ...
 │
 ├── docs/
@@ -97,17 +97,17 @@ morph/
 ### **PHASE 0: Project Setup (Week 1)**
 
 **Deliverables:**
-- [ ] Initialize Go module (`go mod init github.com/VzoelFox/morphlang`)
-- [ ] Create folder structure (sesuai di atas)
-- [ ] Setup `.gitignore` (Go standard + IDE files)
-- [ ] Write `README.md` (project description, build instructions)
-- [ ] Write `docs/spec.md` (5-10 halaman language spec)
-  - [ ] Syntax examples
-  - [ ] Type system
-  - [ ] Control flow
-  - [ ] Function declaration
-  - [ ] Scoping rules
-- [ ] Setup CI/CD (GitHub Actions untuk run tests)
+- [x] Initialize Go module (`go mod init github.com/VzoelFox/morphlang`)
+- [x] Create folder structure (sesuai di atas)
+- [x] Setup `.gitignore` (Go standard + IDE files)
+- [x] Write `README.md` (project description, build instructions)
+- [x] Write `docs/spec.md` (5-10 halaman language spec)
+  - [x] Syntax examples
+  - [x] Type system
+  - [x] Control flow
+  - [x] Function declaration
+  - [x] Scoping rules
+- [x] Setup CI/CD (GitHub Actions untuk run tests)
 
 **Output:** Empty project structure dengan spec document
 
@@ -116,28 +116,28 @@ morph/
 ### **PHASE 1: Lexer (Week 2-3)**
 
 **Patch 1.1: Token Definitions**
-- [ ] Define `TokenType` enum (`pkg/lexer/token.go`)
-  - [ ] Keywords (fungsi, kembalikan, jika, etc)
-  - [ ] Literals (angka, teks, benar/salah)
-  - [ ] Operators (+, -, *, /, ==, !=, etc)
-  - [ ] Delimiters ({, }, (, ), [, ], etc)
-- [ ] Write 20 test cases untuk token types
+- [x] Define `TokenType` enum (`pkg/lexer/token.go`)
+  - [x] Keywords (fungsi, kembalikan, jika, etc)
+  - [x] Literals (angka, teks, benar/salah)
+  - [x] Operators (+, -, *, /, ==, !=, etc)
+  - [x] Delimiters ({, }, (, ), [, ], etc)
+- [x] Write 20 test cases untuk token types
 
 **Patch 1.2: Basic Lexer**
-- [ ] Implement `Lexer` struct (`pkg/lexer/lexer.go`)
-- [ ] Implement `NextToken()` method
-- [ ] Handle whitespace, comments
-- [ ] Write 30 test cases (identifiers, numbers, strings)
+- [x] Implement `Lexer` struct (`pkg/lexer/lexer.go`)
+- [x] Implement `NextToken()` method
+- [x] Handle whitespace, comments
+- [x] Write 30 test cases (identifiers, numbers, strings)
 
 **Patch 1.3: Advanced Lexing**
-- [ ] Handle multi-character operators (==, !=, <=, >=)
-- [ ] Handle string escapes (\n, \t, \", etc)
-- [ ] Error reporting (line/column numbers)
-- [ ] Write 30 test cases (edge cases, errors)
+- [x] Handle multi-character operators (==, !=, <=, >=)
+- [x] Handle string escapes (\n, \t, \", etc)
+- [x] Error reporting (line/column numbers)
+- [x] Write 30 test cases (edge cases, errors)
 
 **Deliverables:**
-- [ ] 80+ passing lexer tests
-- [ ] Can tokenize all valid Morph syntax
+- [x] 80+ passing lexer tests
+- [x] Can tokenize all valid Morph syntax
 
 ---
 
@@ -252,11 +252,11 @@ morph/
 - [ ] Write usage documentation
 
 **Patch 4.3: Examples**
-- [ ] Write `hello_world.morph`
-- [ ] Write `fibonacci.morph`
-- [ ] Write `calculator.morph`
-- [ ] Write `faktorial.morph`
-- [ ] Write `sorting.morph`
+- [ ] Write `hello_world.fox`
+- [ ] Write `fibonacci.fox`
+- [ ] Write `calculator.fox`
+- [ ] Write `faktorial.fox`
+- [ ] Write `sorting.fox`
 
 **Patch 4.4: Documentation**
 - [ ] Write `docs/tutorial.md` (getting started guide)
