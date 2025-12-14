@@ -1,0 +1,24 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test output
+*.out
+*.log
+
+# Vendor
+vendor/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+*.morph.session.archive
+*.fox.vz
+.morph.session
