@@ -98,9 +98,21 @@ func (a *Analyzer) analyzeTopLevel(stmt parser.Statement) {
 	case *parser.AssignmentStatement:
 		// Global variable
 		name := s.Name.Value
+		inferredType := "unknown"
+
+		// Simple type inference for literals
+		switch s.Value.(type) {
+		case *parser.IntegerLiteral:
+			inferredType = "integer"
+		case *parser.StringLiteral:
+			inferredType = "string"
+		case *parser.BooleanLiteral:
+			inferredType = "boolean"
+		}
+
 		a.context.GlobalVars[name] = &Variable{
 			Line: s.Token.Line,
-			Type: "unknown",
+			Type: inferredType,
 		}
 		a.walkExpression(s.Value, func(node parser.Node) {})
 	}
