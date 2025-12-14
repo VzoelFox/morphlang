@@ -11,19 +11,16 @@ type Node interface {
 	String() string
 }
 
-// All statement nodes implement this
 type Statement interface {
 	Node
 	statementNode()
 }
 
-// All expression nodes implement this
 type Expression interface {
 	Node
 	expressionNode()
 }
 
-// Program is the root node of every AST
 type Program struct {
 	Statements []Statement
 }
@@ -43,10 +40,8 @@ func (p *Program) String() string {
 	return out.String()
 }
 
-// ExpressionStatement wraps an expression so it can be used as a statement
-// e.g., "x + 10" on its own line
 type ExpressionStatement struct {
-	Token      lexer.Token // the first token of the expression
+	Token      lexer.Token
 	Expression Expression
 }
 
@@ -59,9 +54,8 @@ func (es *ExpressionStatement) String() string {
 	return ""
 }
 
-// Identifier
 type Identifier struct {
-	Token lexer.Token // the lexer.IDENT token
+	Token lexer.Token
 	Value string
 }
 
@@ -69,7 +63,6 @@ func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
 func (i *Identifier) String() string       { return i.Value }
 
-// IntegerLiteral
 type IntegerLiteral struct {
 	Token lexer.Token
 	Value int64
@@ -79,7 +72,6 @@ func (il *IntegerLiteral) expressionNode()      {}
 func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
 func (il *IntegerLiteral) String() string       { return il.Token.Literal }
 
-// StringLiteral
 type StringLiteral struct {
 	Token lexer.Token
 	Value string
@@ -89,7 +81,29 @@ func (sl *StringLiteral) expressionNode()      {}
 func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
 func (sl *StringLiteral) String() string       { return sl.Token.Literal }
 
-// BooleanLiteral
+type InterpolatedString struct {
+	Token lexer.Token // The first part
+	Parts []Expression
+}
+
+func (is *InterpolatedString) expressionNode()      {}
+func (is *InterpolatedString) TokenLiteral() string { return is.Token.Literal }
+func (is *InterpolatedString) String() string {
+	var out bytes.Buffer
+	out.WriteString("\"")
+	for _, p := range is.Parts {
+		if sl, ok := p.(*StringLiteral); ok {
+			out.WriteString(sl.Value)
+		} else {
+			out.WriteString("#{")
+			out.WriteString(p.String())
+			out.WriteString("}")
+		}
+	}
+	out.WriteString("\"")
+	return out.String()
+}
+
 type BooleanLiteral struct {
 	Token lexer.Token
 	Value bool
@@ -99,9 +113,8 @@ func (b *BooleanLiteral) expressionNode()      {}
 func (b *BooleanLiteral) TokenLiteral() string { return b.Token.Literal }
 func (b *BooleanLiteral) String() string       { return b.Token.Literal }
 
-// PrefixExpression (e.g., -5, !true)
 type PrefixExpression struct {
-	Token    lexer.Token // The prefix token, e.g. ! or -
+	Token    lexer.Token
 	Operator string
 	Right    Expression
 }
@@ -117,9 +130,8 @@ func (pe *PrefixExpression) String() string {
 	return out.String()
 }
 
-// InfixExpression (e.g., 5 + 5)
 type InfixExpression struct {
-	Token    lexer.Token // The operator token, e.g. +
+	Token    lexer.Token
 	Left     Expression
 	Operator string
 	Right    Expression
@@ -137,9 +149,8 @@ func (ie *InfixExpression) String() string {
 	return out.String()
 }
 
-// BlockStatement (e.g., { ... })
 type BlockStatement struct {
-	Token      lexer.Token // the { token (or whatever starts the block)
+	Token      lexer.Token
 	Statements []Statement
 }
 
@@ -147,20 +158,17 @@ func (bs *BlockStatement) statementNode()       {}
 func (bs *BlockStatement) TokenLiteral() string { return bs.Token.Literal }
 func (bs *BlockStatement) String() string {
 	var out bytes.Buffer
-	out.WriteString("{ ")
 	for _, s := range bs.Statements {
 		out.WriteString(s.String())
 	}
-	out.WriteString(" }")
 	return out.String()
 }
 
-// IfExpression (jika ...)
 type IfExpression struct {
-	Token       lexer.Token // The 'jika' token
+	Token       lexer.Token
 	Condition   Expression
 	Consequence *BlockStatement
-	Alternative *BlockStatement // lainnya block or another jika (chained)
+	Alternative *BlockStatement
 }
 
 func (ie *IfExpression) expressionNode()      {}
@@ -175,12 +183,12 @@ func (ie *IfExpression) String() string {
 		out.WriteString(" lainnya ")
 		out.WriteString(ie.Alternative.String())
 	}
+	out.WriteString(" akhir")
 	return out.String()
 }
 
-// WhileExpression (selama ...)
 type WhileExpression struct {
-	Token     lexer.Token // The 'selama' token
+	Token     lexer.Token
 	Condition Expression
 	Body      *BlockStatement
 }
@@ -193,13 +201,13 @@ func (we *WhileExpression) String() string {
 	out.WriteString(we.Condition.String())
 	out.WriteString(" ")
 	out.WriteString(we.Body.String())
+	out.WriteString(" akhir")
 	return out.String()
 }
 
-// FunctionLiteral (fungsi)
 type FunctionLiteral struct {
-	Token      lexer.Token // The 'fungsi' token
-	Name       string      // Function name (optional? In Morph `fungsi name(args)` syntax usually implies declaration, but literal implies lambda. `AGENTS.md` shows `fungsi tambah(a,b)`.
+	Token      lexer.Token
+	Name       string
 	Parameters []*Identifier
 	Body       *BlockStatement
 }
@@ -222,13 +230,13 @@ func (fl *FunctionLiteral) String() string {
 	}
 	out.WriteString(") ")
 	out.WriteString(fl.Body.String())
+	out.WriteString(" akhir")
 	return out.String()
 }
 
-// CallExpression (add(1, 2))
 type CallExpression struct {
-	Token     lexer.Token // The '(' token
-	Function  Expression  // Identifier or FunctionLiteral
+	Token     lexer.Token
+	Function  Expression
 	Arguments []Expression
 }
 
@@ -248,9 +256,8 @@ func (ce *CallExpression) String() string {
 	return out.String()
 }
 
-// ReturnStatement (kembalikan ...)
 type ReturnStatement struct {
-	Token       lexer.Token // the 'kembalikan' token
+	Token       lexer.Token
 	ReturnValue Expression
 }
 
@@ -266,13 +273,8 @@ func (rs *ReturnStatement) String() string {
 	return out.String()
 }
 
-// AssignmentStatement (x = 5)
-// In Morph, var declaration and assignment are same syntax: `x = 5`.
 type AssignmentStatement struct {
-	Token lexer.Token // the identifier token? Or the '=' token?
-	// Usually better to anchor on Identifier token or Assignment operator.
-	// But `x = 5` starts with `x`.
-	// AST node usually stores the Name (Identifier) and Value (Expression).
+	Token lexer.Token
 	Name  *Identifier
 	Value Expression
 }
