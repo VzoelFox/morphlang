@@ -59,7 +59,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.IDENT, p.parseIdentifier)
 	p.registerPrefix(lexer.INT, p.parseIntegerLiteral)
 	p.registerPrefix(lexer.STRING, p.parseStringLiteral)
-	p.registerPrefix(lexer.INTERP_START, p.parseStringLiteral) // Added registration
+	p.registerPrefix(lexer.INTERP_START, p.parseStringLiteral)
 	p.registerPrefix(lexer.BENAR, p.parseBoolean)
 	p.registerPrefix(lexer.SALAH, p.parseBoolean)
 	p.registerPrefix(lexer.BANG, p.parsePrefixExpression)
@@ -331,7 +331,8 @@ func (p *Parser) parseWhileExpression() Expression {
 	expression.Body = p.parseBlockStatement()
 
 	if p.curTokenIs(lexer.AKHIR) {
-		p.nextToken()
+		// Consumed by loop? No, loop breaks.
+		// We verify it is AKHIR, but do NOT consume it past this node.
 	} else {
 		p.curError(lexer.AKHIR)
 	}
@@ -402,7 +403,7 @@ func (p *Parser) parseIfExpression() Expression {
 
 		// Expect AKHIR after lainnya block
 		if p.curTokenIs(lexer.AKHIR) {
-			p.nextToken()
+			// Do not consume
 		} else {
 			p.curError(lexer.AKHIR)
 		}
@@ -414,11 +415,11 @@ func (p *Parser) parseIfExpression() Expression {
 				&ExpressionStatement{Expression: child},
 			},
 		}
-		// child parseIfExpression consumes the final AKHIR
+		// child parseIfExpression finishes at AKHIR.
 	} else {
 		// Expect AKHIR
 		if p.curTokenIs(lexer.AKHIR) {
-			p.nextToken()
+			// Do not consume
 		} else {
 			p.curError(lexer.AKHIR)
 		}
@@ -446,7 +447,7 @@ func (p *Parser) parseFunctionLiteral() Expression {
 	lit.Body = p.parseBlockStatement()
 
 	if p.curTokenIs(lexer.AKHIR) {
-		p.nextToken()
+		// Do not consume
 	} else {
 		p.curError(lexer.AKHIR)
 	}
