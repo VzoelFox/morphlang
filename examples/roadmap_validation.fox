@@ -1,0 +1,16 @@
+# roadmap_validation.fox
+
+x = 100
+y = 200
+nama = "Vzoel"
+
+fungsi hitung(a, b)
+  jika a > b
+    kembalikan a - b
+  lainnya
+    kembalikan a + b
+  akhir
+akhir
+
+hasil = hitung(x, y)
+cetak("Hasil: #{hasil}")
