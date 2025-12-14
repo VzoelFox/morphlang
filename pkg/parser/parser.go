@@ -38,9 +38,37 @@ type (
 	infixParseFn  func(Expression) Expression
 )
 
+type ErrorLevel string
+
+const (
+	LEVEL_ERROR   ErrorLevel = "ERROR"
+	LEVEL_WARNING ErrorLevel = "WARNING"
+	LEVEL_PANIC   ErrorLevel = "PANIC"
+)
+
+type ParserError struct {
+	Level   ErrorLevel
+	Message string
+	Line    int
+	Column  int
+	File    string
+	Context string
+}
+
+func (e ParserError) String() string {
+	pointer := ""
+	for i := 0; i < e.Column-1; i++ {
+		pointer += " "
+	}
+	pointer += "^"
+
+	return fmt.Sprintf("%s [%d:%d]: %s\n  %d | %s\n       %s",
+		e.Level, e.Line, e.Column, e.Message, e.Line, e.Context, pointer)
+}
+
 type Parser struct {
 	l      *lexer.Lexer
-	errors []string
+	errors []ParserError
 
 	curToken  lexer.Token
 	peekToken lexer.Token
@@ -52,7 +80,7 @@ type Parser struct {
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		l:      l,
-		errors: []string{},
+		errors: []ParserError{},
 	}
 
 	p.prefixParseFns = make(map[lexer.TokenType]prefixParseFn)
@@ -94,7 +122,7 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
-func (p *Parser) Errors() []string {
+func (p *Parser) Errors() []ParserError {
 	return p.errors
 }
 
@@ -102,16 +130,15 @@ func (p *Parser) addDetailedError(tok lexer.Token, format string, args ...interf
 	msg := fmt.Sprintf(format, args...)
 	lineContent := p.getLineContent(tok.Line)
 
-	pointer := ""
-	for i := 0; i < tok.Column-1; i++ {
-		pointer += " "
+	err := ParserError{
+		Level:   LEVEL_ERROR,
+		Message: msg,
+		Line:    tok.Line,
+		Column:  tok.Column,
+		Context: lineContent,
 	}
-	pointer += "^"
 
-	formatted := fmt.Sprintf("Error [%d:%d]: %s\n  %d | %s\n       %s",
-		tok.Line, tok.Column, msg, tok.Line, lineContent, pointer)
-
-	p.errors = append(p.errors, formatted)
+	p.errors = append(p.errors, err)
 }
 
 func (p *Parser) getLineContent(line int) string {

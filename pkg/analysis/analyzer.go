@@ -17,7 +17,7 @@ type Analyzer struct {
 	currFunc string
 }
 
-func GenerateContext(program *parser.Program, filename string, input string, parserErrors []string) (*Context, error) {
+func GenerateContext(program *parser.Program, filename string, input string, parserErrors []parser.ParserError) (*Context, error) {
 	ctx := &Context{
 		Version:       "1.0.0",
 		File:          filename,
@@ -42,7 +42,14 @@ func GenerateContext(program *parser.Program, filename string, input string, par
 
 	// Parse Errors
 	for _, err := range parserErrors {
-		ctx.Errors = append(ctx.Errors, ParserError{Message: err, File: filename})
+		ctx.Errors = append(ctx.Errors, ParserError{
+			Level:   string(err.Level),
+			Message: err.Message,
+			Line:    err.Line,
+			Column:  err.Column,
+			File:    filename,
+			Context: err.Context,
+		})
 	}
 
 	if program == nil {

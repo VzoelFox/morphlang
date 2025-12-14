@@ -13,6 +13,16 @@ import (
 )
 
 func main() {
+	// Panic Recovery
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("\n\033[31m[INTERNAL ERROR] Morph Compiler Crashed!\033[0m")
+			fmt.Printf("Panic: %v\n", r)
+			fmt.Println("Please report this issue with the code that caused it.")
+			os.Exit(1)
+		}
+	}()
+
 	debug := flag.Bool("debug", false, "Enable debug output")
 	check := flag.Bool("check", false, "Check syntax only")
 	flag.Parse()
