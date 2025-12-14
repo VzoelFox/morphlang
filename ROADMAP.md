@@ -144,47 +144,47 @@ morph/
 ### **PHASE 2: Parser (Week 4-6)**
 
 **Patch 2.1: AST Definitions**
-- [ ] Define AST node interfaces (`pkg/parser/ast.go`)
-  - [ ] `Expression` interface
-  - [ ] `Statement` interface
-  - [ ] `Program` node (root)
-- [ ] Implement concrete nodes:
-  - [ ] `IntegerLiteral`, `StringLiteral`, `BooleanLiteral`
-  - [ ] `Identifier`
-  - [ ] `BinaryExpression` (+, -, *, /, etc)
-- [ ] Write 15 test cases (AST node creation)
+- [x] Define AST node interfaces (`pkg/parser/ast.go`)
+  - [x] `Expression` interface
+  - [x] `Statement` interface
+  - [x] `Program` node (root)
+- [x] Implement concrete nodes:
+  - [x] `IntegerLiteral`, `StringLiteral`, `BooleanLiteral`
+  - [x] `Identifier`
+  - [x] `BinaryExpression` (+, -, *, /, etc)
+- [x] Write 15 test cases (AST node creation)
 
 **Patch 2.2: Expression Parser**
-- [ ] Implement `Parser` struct (`pkg/parser/parser.go`)
-- [ ] Implement Pratt parser untuk expressions
-  - [ ] Precedence table
-  - [ ] Prefix parsers (literals, identifiers, -x, !x)
-  - [ ] Infix parsers (binary ops, function calls)
-- [ ] Write 40 test cases (expressions)
+- [x] Implement `Parser` struct (`pkg/parser/parser.go`)
+- [x] Implement Pratt parser untuk expressions
+  - [x] Precedence table
+  - [x] Prefix parsers (literals, identifiers, -x, !x)
+  - [x] Infix parsers (binary ops, function calls)
+- [x] Write 40 test cases (expressions)
 
 **Patch 2.3: Statement Parser**
-- [ ] Parse variable declarations (`var x = 10`)
-- [ ] Parse assignments (`x = 20`)
-- [ ] Parse return statements
-- [ ] Parse if/else
-- [ ] Parse while loops
-- [ ] Write 40 test cases (statements)
+- [x] Parse variable declarations (`var x = 10`)
+- [x] Parse assignments (`x = 20`)
+- [x] Parse return statements
+- [x] Parse if/else
+- [x] Parse while loops
+- [x] Write 40 test cases (statements)
 
 **Patch 2.4: Function Parser**
-- [ ] Parse function declarations
-- [ ] Parse function calls
-- [ ] Parse blocks `{ ... }`
-- [ ] Write 30 test cases (functions)
+- [x] Parse function declarations
+- [x] Parse function calls
+- [x] Parse blocks `{ ... }`
+- [x] Write 30 test cases (functions)
 
 **Patch 2.5: Error Recovery**
-- [ ] Implement error reporting (line, column, message)
-- [ ] Add panic mode recovery
-- [ ] Write 20 test cases (syntax errors)
+- [x] Implement error reporting (line, column, message)
+- [x] Add panic mode recovery
+- [x] Write 20 test cases (syntax errors)
 
 **Deliverables:**
-- [ ] 145+ passing parser tests
-- [ ] Can parse all valid Morph syntax
-- [ ] Clear error messages untuk invalid syntax
+- [x] 145+ passing parser tests
+- [x] Can parse all valid Morph syntax
+- [x] Clear error messages untuk invalid syntax
 
 ---
 
