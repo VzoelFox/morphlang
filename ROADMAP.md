@@ -1,0 +1,353 @@
+## **STRUKTUR FOLDER PROJECT**
+
+```
+morph/
+├── cmd/
+│   ├── morph/              # Main compiler executable
+│   │   └── main.go
+│   ├── morphi/             # Interactive REPL
+│   │   └── main.go
+│   └── morphfmt/           # Code formatter (nanti)
+│       └── main.go
+│
+├── pkg/
+│   ├── lexer/              # Tokenizer
+│   │   ├── lexer.go
+│   │   ├── lexer_test.go
+│   │   ├── token.go
+│   │   └── token_test.go
+│   │
+│   ├── parser/             # AST builder
+│   │   ├── parser.go
+│   │   ├── parser_test.go
+│   │   ├── ast.go
+│   │   └── ast_test.go
+│   │
+│   ├── evaluator/          # Tree-walking interpreter (MVP)
+│   │   ├── evaluator.go
+│   │   ├── evaluator_test.go
+│   │   ├── environment.go
+│   │   └── builtins.go
+│   │
+│   ├── compiler/           # Bytecode compiler (Phase 2)
+│   │   ├── compiler.go
+│   │   ├── compiler_test.go
+│   │   ├── symbol_table.go
+│   │   └── opcodes.go
+│   │
+│   ├── vm/                 # Virtual machine (Phase 2)
+│   │   ├── vm.go
+│   │   ├── vm_test.go
+│   │   ├── stack.go
+│   │   └── frame.go
+│   │
+│   ├── object/             # Runtime object system
+│   │   ├── object.go
+│   │   ├── environment.go
+│   │   └── builtins.go
+│   │
+│   └── stdlib/             # Standard library (Phase 3)
+│       ├── io/
+│       │   └── ...
+│       ├── string/
+│       │   └── ...
+│       └── math/
+│           └── ...
+│
+├── test/
+│   ├── fixtures/           # Test morph programs
+│   │   ├── valid/
+│   │   │   ├── hello.morph
+│   │   │   ├── fibonacci.morph
+│   │   │   └── ...
+│   │   └── invalid/
+│   │       ├── syntax_error_1.morph
+│   │       └── ...
+│   │
+│   └── integration/        # Integration tests
+│       └── ...
+│
+├── examples/               # Example programs
+│   ├── hello_world.morph
+│   ├── calculator.morph
+│   └── ...
+│
+├── docs/
+│   ├── spec.md            # Language specification
+│   ├── grammar.md         # Formal grammar
+│   ├── tutorial.md        # Getting started
+│   └── stdlib.md          # Standard library docs
+│
+├── scripts/
+│   ├── test.sh            # Run all tests
+│   ├── benchmark.sh       # Performance benchmarks
+│   └── build.sh           # Build binaries
+│
+├── go.mod
+├── go.sum
+├── README.md
+├── LICENSE
+└── CHANGELOG.md
+```
+
+---
+
+## **TODO LIST - REALISTIC PHASES**
+
+### **PHASE 0: Project Setup (Week 1)**
+
+**Deliverables:**
+- [ ] Initialize Go module (`go mod init github.com/VzoelFox/morphlang`)
+- [ ] Create folder structure (sesuai di atas)
+- [ ] Setup `.gitignore` (Go standard + IDE files)
+- [ ] Write `README.md` (project description, build instructions)
+- [ ] Write `docs/spec.md` (5-10 halaman language spec)
+  - [ ] Syntax examples
+  - [ ] Type system
+  - [ ] Control flow
+  - [ ] Function declaration
+  - [ ] Scoping rules
+- [ ] Setup CI/CD (GitHub Actions untuk run tests)
+
+**Output:** Empty project structure dengan spec document
+
+---
+
+### **PHASE 1: Lexer (Week 2-3)**
+
+**Patch 1.1: Token Definitions**
+- [ ] Define `TokenType` enum (`pkg/lexer/token.go`)
+  - [ ] Keywords (fungsi, kembalikan, jika, etc)
+  - [ ] Literals (angka, teks, benar/salah)
+  - [ ] Operators (+, -, *, /, ==, !=, etc)
+  - [ ] Delimiters ({, }, (, ), [, ], etc)
+- [ ] Write 20 test cases untuk token types
+
+**Patch 1.2: Basic Lexer**
+- [ ] Implement `Lexer` struct (`pkg/lexer/lexer.go`)
+- [ ] Implement `NextToken()` method
+- [ ] Handle whitespace, comments
+- [ ] Write 30 test cases (identifiers, numbers, strings)
+
+**Patch 1.3: Advanced Lexing**
+- [ ] Handle multi-character operators (==, !=, <=, >=)
+- [ ] Handle string escapes (\n, \t, \", etc)
+- [ ] Error reporting (line/column numbers)
+- [ ] Write 30 test cases (edge cases, errors)
+
+**Deliverables:**
+- [ ] 80+ passing lexer tests
+- [ ] Can tokenize all valid Morph syntax
+
+---
+
+### **PHASE 2: Parser (Week 4-6)**
+
+**Patch 2.1: AST Definitions**
+- [ ] Define AST node interfaces (`pkg/parser/ast.go`)
+  - [ ] `Expression` interface
+  - [ ] `Statement` interface
+  - [ ] `Program` node (root)
+- [ ] Implement concrete nodes:
+  - [ ] `IntegerLiteral`, `StringLiteral`, `BooleanLiteral`
+  - [ ] `Identifier`
+  - [ ] `BinaryExpression` (+, -, *, /, etc)
+- [ ] Write 15 test cases (AST node creation)
+
+**Patch 2.2: Expression Parser**
+- [ ] Implement `Parser` struct (`pkg/parser/parser.go`)
+- [ ] Implement Pratt parser untuk expressions
+  - [ ] Precedence table
+  - [ ] Prefix parsers (literals, identifiers, -x, !x)
+  - [ ] Infix parsers (binary ops, function calls)
+- [ ] Write 40 test cases (expressions)
+
+**Patch 2.3: Statement Parser**
+- [ ] Parse variable declarations (`var x = 10`)
+- [ ] Parse assignments (`x = 20`)
+- [ ] Parse return statements
+- [ ] Parse if/else
+- [ ] Parse while loops
+- [ ] Write 40 test cases (statements)
+
+**Patch 2.4: Function Parser**
+- [ ] Parse function declarations
+- [ ] Parse function calls
+- [ ] Parse blocks `{ ... }`
+- [ ] Write 30 test cases (functions)
+
+**Patch 2.5: Error Recovery**
+- [ ] Implement error reporting (line, column, message)
+- [ ] Add panic mode recovery
+- [ ] Write 20 test cases (syntax errors)
+
+**Deliverables:**
+- [ ] 145+ passing parser tests
+- [ ] Can parse all valid Morph syntax
+- [ ] Clear error messages untuk invalid syntax
+
+---
+
+### **PHASE 3: Tree-Walking Interpreter (Week 7-9)**
+
+**Patch 3.1: Object System**
+- [ ] Define `Object` interface (`pkg/object/object.go`)
+- [ ] Implement types:
+  - [ ] `Integer`, `String`, `Boolean`
+  - [ ] `Function`
+  - [ ] `Null`, `Error`
+- [ ] Write 15 test cases
+
+**Patch 3.2: Environment**
+- [ ] Implement `Environment` (variable storage)
+- [ ] Handle scoping (nested environments)
+- [ ] Write 20 test cases
+
+**Patch 3.3: Expression Evaluator**
+- [ ] Implement `Eval()` untuk literals
+- [ ] Implement binary operators (+, -, *, /, ==, !=, etc)
+- [ ] Implement unary operators (-, !)
+- [ ] Write 40 test cases
+
+**Patch 3.4: Statement Evaluator**
+- [ ] Eval variable declarations
+- [ ] Eval assignments
+- [ ] Eval return statements
+- [ ] Eval if/else
+- [ ] Eval while loops
+- [ ] Write 40 test cases
+
+**Patch 3.5: Function Calls**
+- [ ] Eval function declarations
+- [ ] Eval function calls
+- [ ] Handle parameters dan arguments
+- [ ] Handle recursion
+- [ ] Write 30 test cases
+
+**Patch 3.6: Built-in Functions**
+- [ ] Implement `cetak()` (print)
+- [ ] Implement `panjang()` (length)
+- [ ] Implement `tipe()` (type)
+- [ ] Write 15 test cases
+
+**Deliverables:**
+- [ ] 160+ passing evaluator tests
+- [ ] Can run simple Morph programs
+- [ ] REPL working (`cmd/morphi`)
+
+---
+
+### **PHASE 4: Integration & Polish (Week 10)**
+
+**Patch 4.1: End-to-End Testing**
+- [ ] Write 20 integration tests (`test/integration/`)
+- [ ] Test full programs dari `test/fixtures/valid/`
+- [ ] Verify error handling untuk `test/fixtures/invalid/`
+
+**Patch 4.2: CLI Tool**
+- [ ] Implement `cmd/morph/main.go`
+  - [ ] Read file
+  - [ ] Lex → Parse → Eval
+  - [ ] Print result atau error
+- [ ] Write usage documentation
+
+**Patch 4.3: Examples**
+- [ ] Write `hello_world.morph`
+- [ ] Write `fibonacci.morph`
+- [ ] Write `calculator.morph`
+- [ ] Write `faktorial.morph`
+- [ ] Write `sorting.morph`
+
+**Patch 4.4: Documentation**
+- [ ] Write `docs/tutorial.md` (getting started guide)
+- [ ] Write `docs/grammar.md` (formal EBNF grammar)
+- [ ] Update `README.md` (install, usage, examples)
+
+**Deliverables:**
+- [ ] 200+ passing tests total
+- [ ] Working compiler executable
+- [ ] Working REPL
+- [ ] 5+ example programs
+- [ ] Complete documentation
+
+---
+
+### **PHASE 5: Bytecode VM (Week 11-16) - OPTIONAL**
+
+**Patch 5.1: Opcode Definitions**
+- [ ] Define bytecode instructions (`pkg/compiler/opcodes.go`)
+  - [ ] LOAD_CONST, LOAD_VAR, STORE_VAR
+  - [ ] ADD, SUB, MUL, DIV
+  - [ ] JUMP, JUMP_IF_FALSE
+  - [ ] CALL, RETURN
+- [ ] Write opcode tests
+
+**Patch 5.2: Symbol Table**
+- [ ] Implement symbol table (variable → index mapping)
+- [ ] Handle scopes
+- [ ] Write 20 test cases
+
+**Patch 5.3: Compiler**
+- [ ] Implement AST → bytecode compiler
+- [ ] Compile expressions
+- [ ] Compile statements
+- [ ] Compile functions
+- [ ] Write 50 test cases
+
+**Patch 5.4: Virtual Machine**
+- [ ] Implement stack-based VM
+- [ ] Implement instruction dispatch
+- [ ] Handle function calls (call frames)
+- [ ] Write 50 test cases
+
+**Patch 5.5: Integration**
+- [ ] Wire compiler + VM into CLI
+- [ ] Benchmark vs tree-walking interpreter
+- [ ] Write 30 integration tests
+
+**Deliverables:**
+- [ ] 150+ compiler/VM tests
+- [ ] 5-10x performance improvement over interpreter
+- [ ] Backward compatible (same CLI interface)
+
+---
+
+### **PHASE 6: Standard Library (Week 17-20) - OPTIONAL**
+
+**Patch 6.1: I/O Module**
+- [ ] `baca_file(path)` - read file
+- [ ] `tulis_file(path, content)` - write file
+- [ ] `input(prompt)` - read user input
+
+**Patch 6.2: String Module**
+- [ ] `pisah(str, delim)` - split
+- [ ] `gabung(list, delim)` - join
+- [ ] `huruf_besar(str)` - uppercase
+- [ ] `huruf_kecil(str)` - lowercase
+
+**Patch 6.3: Math Module**
+- [ ] `abs(x)`, `max(a, b)`, `min(a, b)`
+- [ ] `pow(x, y)`, `sqrt(x)`
+
+**Deliverables:**
+- [ ] 50+ stdlib tests
+- [ ] Documented stdlib API
+
+---
+
+## **PATCH VERSIONING**
+
+```
+v0.1.0 - Phase 0 complete (Setup)
+v0.2.0 - Phase 1 complete (Lexer)
+v0.3.0 - Phase 2 complete (Parser)
+v0.4.0 - Phase 3 complete (Interpreter MVP) ← MILESTONE
+v0.5.0 - Phase 4 complete (Polish & Docs)
+v1.0.0 - Phase 5 complete (Bytecode VM) ← PUBLIC RELEASE
+v1.1.0 - Phase 6 complete (Stdlib)
+```
+
+---
+
+
+# Founder Vzoel Fox's 
