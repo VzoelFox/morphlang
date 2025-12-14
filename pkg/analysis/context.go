@@ -61,10 +61,12 @@ type ErrorCond struct {
 }
 
 type ParserError struct {
+	Level   string `json:"level"`
 	Line    int    `json:"line"`
 	Column  int    `json:"column"`
 	Message string `json:"message"`
 	File    string `json:"file"`
+	Context string `json:"context"`
 }
 
 type Warning struct {
