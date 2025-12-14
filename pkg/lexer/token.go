@@ -5,10 +5,11 @@ import "strings"
 type TokenType string
 
 type Token struct {
-	Type    TokenType
-	Literal string
-	Line    int
-	Column  int
+	Type            TokenType
+	Literal         string
+	Line            int
+	Column          int
+	HasLeadingSpace bool
 }
 
 const (
@@ -47,6 +48,9 @@ const (
 	RBRACE   = "}"
 	LBRACKET = "["
 	RBRACKET = "]"
+
+	// Interpolation
+	INTERP_START = "#{"
 
 	// Keywords
 	FUNGSI     = "FUNGSI"

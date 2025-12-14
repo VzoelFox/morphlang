@@ -65,8 +65,11 @@ func TestIfExpressionString(t *testing.T) {
 		},
 	}
 
-	if expr.String() != "jika x { y }" {
-		t.Errorf("expr.String() wrong. got=%q", expr.String())
+	// Expect "jika x y akhir" because BlockStatement.String() doesn't add braces,
+	// and IfExpression.String() adds " akhir".
+	expected := "jika x y akhir"
+	if expr.String() != expected {
+		t.Errorf("expr.String() wrong. got=%q, want=%q", expr.String(), expected)
 	}
 }
 

@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/VzoelFox/morphlang/pkg/lexer"
 )
@@ -58,6 +59,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.IDENT, p.parseIdentifier)
 	p.registerPrefix(lexer.INT, p.parseIntegerLiteral)
 	p.registerPrefix(lexer.STRING, p.parseStringLiteral)
+	p.registerPrefix(lexer.INTERP_START, p.parseStringLiteral) // Added registration
 	p.registerPrefix(lexer.BENAR, p.parseBoolean)
 	p.registerPrefix(lexer.SALAH, p.parseBoolean)
 	p.registerPrefix(lexer.BANG, p.parsePrefixExpression)
@@ -96,16 +98,36 @@ func (p *Parser) Errors() []string {
 	return p.errors
 }
 
+func (p *Parser) addDetailedError(tok lexer.Token, format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	lineContent := p.getLineContent(tok.Line)
+
+	pointer := ""
+	for i := 0; i < tok.Column-1; i++ {
+		pointer += " "
+	}
+	pointer += "^"
+
+	formatted := fmt.Sprintf("Error [%d:%d]: %s\n  %d | %s\n       %s",
+		tok.Line, tok.Column, msg, tok.Line, lineContent, pointer)
+
+	p.errors = append(p.errors, formatted)
+}
+
+func (p *Parser) getLineContent(line int) string {
+	lines := strings.Split(p.l.Input(), "\n")
+	if line >= 1 && line <= len(lines) {
+		return lines[line-1]
+	}
+	return ""
+}
+
 func (p *Parser) peekError(t lexer.TokenType) {
-	msg := fmt.Sprintf("expected next token to be %s, got %s instead",
-		t, p.peekToken.Type)
-	p.errors = append(p.errors, msg)
+	p.addDetailedError(p.peekToken, "expected next token to be %s, got %s instead", t, p.peekToken.Type)
 }
 
 func (p *Parser) curError(t lexer.TokenType) {
-	msg := fmt.Sprintf("expected token to be %s, got %s instead",
-		t, p.curToken.Type)
-	p.errors = append(p.errors, msg)
+	p.addDetailedError(p.curToken, "expected token to be %s, got %s instead", t, p.curToken.Type)
 }
 
 func (p *Parser) registerPrefix(tokenType lexer.TokenType, fn prefixParseFn) {
@@ -231,8 +253,7 @@ func (p *Parser) parseIntegerLiteral() Expression {
 
 	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
 	if err != nil {
-		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Literal)
-		p.errors = append(p.errors, msg)
+		p.addDetailedError(p.curToken, "could not parse %q as integer", p.curToken.Literal)
 		return nil
 	}
 
@@ -241,7 +262,45 @@ func (p *Parser) parseIntegerLiteral() Expression {
 }
 
 func (p *Parser) parseStringLiteral() Expression {
-	return &StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+	// Optimization: If simple string (starts with STRING and no following parts)
+	if p.curTokenIs(lexer.STRING) && p.peekToken.Type != lexer.INTERP_START && p.peekToken.Type != lexer.STRING {
+		return &StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+	}
+
+	is := &InterpolatedString{Token: p.curToken, Parts: []Expression{}}
+
+	processToken := func() bool {
+		if p.curTokenIs(lexer.STRING) {
+			is.Parts = append(is.Parts, &StringLiteral{Token: p.curToken, Value: p.curToken.Literal})
+			return true
+		}
+		if p.curTokenIs(lexer.INTERP_START) {
+			p.nextToken() // move to expression
+			expr := p.parseExpression(LOWEST)
+			is.Parts = append(is.Parts, expr)
+			if !p.expectPeek(lexer.RBRACE) {
+				return false
+			}
+			return true
+		}
+		return false
+	}
+
+	if !processToken() {
+		return nil
+	}
+
+	for {
+		if p.peekTokenIs(lexer.INTERP_START) || p.peekTokenIs(lexer.STRING) {
+			p.nextToken()
+			if !processToken() {
+				return nil
+			}
+		} else {
+			break
+		}
+	}
+	return is
 }
 
 func (p *Parser) parseBoolean() Expression {
@@ -287,11 +346,30 @@ func (p *Parser) parseInfixExpression(left Expression) Expression {
 		Left:     left,
 	}
 
+	// Strict Whitespace Check
+	if isBinaryOp(p.curToken.Type) {
+		if !p.curToken.HasLeadingSpace {
+			p.addDetailedError(p.curToken, "Binary operator '%s' requires space before it", p.curToken.Literal)
+		}
+		if !p.peekToken.HasLeadingSpace {
+			p.addDetailedError(p.curToken, "Binary operator '%s' requires space after it", p.curToken.Literal)
+		}
+	}
+
 	precedence := p.curPrecedence()
 	p.nextToken()
 	expression.Right = p.parseExpression(precedence)
 
 	return expression
+}
+
+func isBinaryOp(t lexer.TokenType) bool {
+	switch t {
+	case lexer.PLUS, lexer.MINUS, lexer.SLASH, lexer.ASTERISK,
+		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE:
+		return true
+	}
+	return false
 }
 
 func (p *Parser) parseGroupedExpression() Expression {
@@ -466,6 +544,5 @@ func (p *Parser) expectPeek(t lexer.TokenType) bool {
 }
 
 func (p *Parser) noPrefixParseFnError(t lexer.TokenType) {
-	msg := fmt.Sprintf("no prefix parse function for %s found", t)
-	p.errors = append(p.errors, msg)
+	p.addDetailedError(p.curToken, "no prefix parse function for %s found", t)
 }
