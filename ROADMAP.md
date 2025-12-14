@@ -57,19 +57,19 @@ morph/
 ├── test/
 │   ├── fixtures/           # Test morph programs
 │   │   ├── valid/
-│   │   │   ├── hello.morph
-│   │   │   ├── fibonacci.morph
+│   │   │   ├── hello.fox
+│   │   │   ├── fibonacci.fox
 │   │   │   └── ...
 │   │   └── invalid/
-│   │       ├── syntax_error_1.morph
+│   │       ├── syntax_error_1.fox
 │   │       └── ...
 │   │
 │   └── integration/        # Integration tests
 │       └── ...
 │
 ├── examples/               # Example programs
-│   ├── hello_world.morph
-│   ├── calculator.morph
+│   ├── hello_world.fox
+│   ├── calculator.fox
 │   └── ...
 │
 ├── docs/
@@ -97,17 +97,17 @@ morph/
 ### **PHASE 0: Project Setup (Week 1)**
 
 **Deliverables:**
-- [ ] Initialize Go module (`go mod init github.com/VzoelFox/morphlang`)
-- [ ] Create folder structure (sesuai di atas)
-- [ ] Setup `.gitignore` (Go standard + IDE files)
-- [ ] Write `README.md` (project description, build instructions)
-- [ ] Write `docs/spec.md` (5-10 halaman language spec)
-  - [ ] Syntax examples
-  - [ ] Type system
-  - [ ] Control flow
-  - [ ] Function declaration
-  - [ ] Scoping rules
-- [ ] Setup CI/CD (GitHub Actions untuk run tests)
+- [x] Initialize Go module (`go mod init github.com/VzoelFox/morphlang`)
+- [x] Create folder structure (sesuai di atas)
+- [x] Setup `.gitignore` (Go standard + IDE files)
+- [x] Write `README.md` (project description, build instructions)
+- [x] Write `docs/spec.md` (5-10 halaman language spec)
+  - [x] Syntax examples
+  - [x] Type system
+  - [x] Control flow
+  - [x] Function declaration
+  - [x] Scoping rules
+- [x] Setup CI/CD (GitHub Actions untuk run tests)
 
 **Output:** Empty project structure dengan spec document
 
@@ -252,11 +252,11 @@ morph/
 - [ ] Write usage documentation
 
 **Patch 4.3: Examples**
-- [ ] Write `hello_world.morph`
-- [ ] Write `fibonacci.morph`
-- [ ] Write `calculator.morph`
-- [ ] Write `faktorial.morph`
-- [ ] Write `sorting.morph`
+- [ ] Write `hello_world.fox`
+- [ ] Write `fibonacci.fox`
+- [ ] Write `calculator.fox`
+- [ ] Write `faktorial.fox`
+- [ ] Write `sorting.fox`
 
 **Patch 4.4: Documentation**
 - [ ] Write `docs/tutorial.md` (getting started guide)
