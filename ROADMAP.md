@@ -23,6 +23,10 @@ morph/
 │   │   ├── ast.go
 │   │   └── ast_test.go
 │   │
+│   ├── analysis/           # Static Analysis & Context
+│   │   ├── analyzer.go
+│   │   └── context.go
+│   │
 │   ├── evaluator/          # Tree-walking interpreter (MVP)
 │   │   ├── evaluator.go
 │   │   ├── evaluator_test.go
@@ -73,8 +77,8 @@ morph/
 │   └── ...
 │
 ├── docs/
-│   ├── spec.md            # Language specification
-│   ├── grammar.md         # Formal grammar
+│   ├── specification.md   # Language specification (The Standard)
+│   ├── grammar.md         # Formal grammar (EBNF)
 │   ├── tutorial.md        # Getting started
 │   └── stdlib.md          # Standard library docs
 │
@@ -101,12 +105,13 @@ morph/
 - [x] Create folder structure (sesuai di atas)
 - [x] Setup `.gitignore` (Go standard + IDE files)
 - [x] Write `README.md` (project description, build instructions)
-- [x] Write `docs/spec.md` (5-10 halaman language spec)
+- [x] Write `docs/specification.md` (Complete Language Spec)
   - [x] Syntax examples
   - [x] Type system
   - [x] Control flow
   - [x] Function declaration
   - [x] Scoping rules
+  - [x] Bytecode Standard
 - [x] Setup CI/CD (GitHub Actions untuk run tests)
 
 **Output:** Empty project structure dengan spec document
@@ -176,10 +181,11 @@ morph/
 - [x] Parse blocks `{ ... }`
 - [x] Write 30 test cases (functions)
 
-**Patch 2.5: Error Recovery**
+**Patch 2.5: Error Recovery & Strictness**
 - [x] Implement error reporting (line, column, message)
 - [x] Add panic mode recovery
 - [x] Write 20 test cases (syntax errors)
+- [x] **Strict Whitespace & Interpolation (Refactored)**
 
 **Deliverables:**
 - [x] 145+ passing parser tests
@@ -244,11 +250,11 @@ morph/
 - [ ] Test full programs dari `test/fixtures/valid/`
 - [ ] Verify error handling untuk `test/fixtures/invalid/`
 
-**Patch 4.2: CLI Tool**
-- [ ] Implement `cmd/morph/main.go`
-  - [ ] Read file
-  - [ ] Lex → Parse → Eval
-  - [ ] Print result atau error
+**Patch 4.2: CLI Tool (Accelerated)**
+- [x] Implement `cmd/morph/main.go` (Basic)
+  - [x] Read file
+  - [x] Lex → Parse → Analyze
+  - [x] Generate `.fox.vz` context file
 - [ ] Write usage documentation
 
 **Patch 4.3: Examples**
@@ -260,7 +266,7 @@ morph/
 
 **Patch 4.4: Documentation**
 - [ ] Write `docs/tutorial.md` (getting started guide)
-- [ ] Write `docs/grammar.md` (formal EBNF grammar)
+- [x] Write `docs/grammar.md` (formal EBNF grammar)
 - [ ] Update `README.md` (install, usage, examples)
 
 **Deliverables:**

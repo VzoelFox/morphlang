@@ -2,17 +2,77 @@ package lexer
 
 type Lexer struct {
 	input        string
-	position     int  // current position in input (points to current char)
-	readPosition int  // current reading position in input (after current char)
-	ch           byte // current char under examination
-	line         int  // current line number
-	column       int  // current column number
+	position     int
+	readPosition int
+	ch           byte
+	line         int
+	column       int
+
+	states      []int
+	braceCounts []int
 }
 
+const (
+	STATE_CODE   = 0
+	STATE_STRING = 1
+)
+
 func New(input string) *Lexer {
-	l := &Lexer{input: input, line: 1, column: 0}
+	l := &Lexer{
+		input:       input,
+		line:        1,
+		column:      0,
+		states:      []int{STATE_CODE},
+		braceCounts: []int{0},
+	}
 	l.readChar()
 	return l
+}
+
+func (l *Lexer) currentState() int {
+	if len(l.states) == 0 {
+		return STATE_CODE
+	}
+	return l.states[len(l.states)-1]
+}
+
+func (l *Lexer) pushState(s int) {
+	l.states = append(l.states, s)
+	if s == STATE_CODE {
+		l.braceCounts = append(l.braceCounts, 0)
+	}
+}
+
+func (l *Lexer) popState() {
+	if len(l.states) == 0 {
+		return
+	}
+	s := l.states[len(l.states)-1]
+	l.states = l.states[:len(l.states)-1]
+	if s == STATE_CODE {
+		if len(l.braceCounts) > 0 {
+			l.braceCounts = l.braceCounts[:len(l.braceCounts)-1]
+		}
+	}
+}
+
+func (l *Lexer) currentBraceCount() int {
+	if len(l.braceCounts) == 0 {
+		return 0
+	}
+	return l.braceCounts[len(l.braceCounts)-1]
+}
+
+func (l *Lexer) incrementBraceCount() {
+	if len(l.braceCounts) > 0 {
+		l.braceCounts[len(l.braceCounts)-1]++
+	}
+}
+
+func (l *Lexer) decrementBraceCount() {
+	if len(l.braceCounts) > 0 {
+		l.braceCounts[len(l.braceCounts)-1]--
+	}
 }
 
 func (l *Lexer) readChar() {
@@ -34,11 +94,19 @@ func (l *Lexer) peekChar() byte {
 }
 
 func (l *Lexer) NextToken() Token {
+	if l.currentState() == STATE_STRING {
+		return l.readStringToken()
+	}
+	return l.readCodeToken()
+}
+
+func (l *Lexer) readCodeToken() Token {
 	var tok Token
 
+	startPos := l.position
 	l.skipWhitespace()
+	hasLeadingSpace := l.position > startPos
 
-	// Capture position for the token start
 	tokLine := l.line
 	tokCol := l.column
 
@@ -100,16 +168,31 @@ func (l *Lexer) NextToken() Token {
 	case ')':
 		tok = newToken(RPAREN, l.ch)
 	case '{':
+		l.incrementBraceCount()
 		tok = newToken(LBRACE, l.ch)
 	case '}':
-		tok = newToken(RBRACE, l.ch)
+		if len(l.braceCounts) > 1 && l.currentBraceCount() == 0 {
+			l.popState()
+			tok = newToken(RBRACE, l.ch)
+		} else {
+			l.decrementBraceCount()
+			tok = newToken(RBRACE, l.ch)
+		}
 	case '[':
 		tok = newToken(LBRACKET, l.ch)
 	case ']':
 		tok = newToken(RBRACKET, l.ch)
 	case '"':
-		tok.Type = STRING
-		tok.Literal = l.readString()
+		// Optimization for empty string
+		if l.peekChar() == '"' {
+			tok = Token{Type: STRING, Literal: "", Line: tokLine, Column: tokCol}
+			l.readChar() // consume opening "
+			// consume closing " happens at end of function
+		} else {
+			l.pushState(STATE_STRING)
+			l.readChar() // consume opening "
+			return l.readStringToken()
+		}
 	case 0:
 		tok.Literal = ""
 		tok.Type = EOF
@@ -119,12 +202,14 @@ func (l *Lexer) NextToken() Token {
 			tok.Type = LookupIdent(tok.Literal)
 			tok.Line = tokLine
 			tok.Column = tokCol
+			tok.HasLeadingSpace = hasLeadingSpace
 			return tok
 		} else if isDigit(l.ch) {
 			tok.Literal = l.readNumber()
 			tok.Type = INT
 			tok.Line = tokLine
 			tok.Column = tokCol
+			tok.HasLeadingSpace = hasLeadingSpace
 			return tok
 		} else {
 			tok = newToken(ILLEGAL, l.ch)
@@ -133,9 +218,32 @@ func (l *Lexer) NextToken() Token {
 
 	tok.Line = tokLine
 	tok.Column = tokCol
+	tok.HasLeadingSpace = hasLeadingSpace
 
 	l.readChar()
 	return tok
+}
+
+func (l *Lexer) readStringToken() Token {
+	tokLine := l.line
+	tokCol := l.column
+
+	if l.ch == '"' {
+		l.popState()
+		l.readChar() // consume closing quote
+		return l.NextToken()
+	}
+
+	if l.ch == '#' && l.peekChar() == '{' {
+		l.pushState(STATE_CODE)
+		tok := Token{Type: INTERP_START, Literal: "#{", Line: tokLine, Column: tokCol}
+		l.readChar() // consume #
+		l.readChar() // consume {
+		return tok
+	}
+
+	content := l.readStringContent()
+	return Token{Type: STRING, Literal: content, Line: tokLine, Column: tokCol}
 }
 
 func newToken(tokenType TokenType, ch byte) Token {
@@ -166,13 +274,16 @@ func isDigit(ch byte) bool {
 	return '0' <= ch && ch <= '9'
 }
 
-func (l *Lexer) readString() string {
+func (l *Lexer) readStringContent() string {
 	var out string
 	for {
-		l.readChar()
 		if l.ch == '"' || l.ch == 0 {
 			break
 		}
+		if l.ch == '#' && l.peekChar() == '{' {
+			break
+		}
+
 		if l.ch == '\\' {
 			l.readChar()
 			switch l.ch {
@@ -187,14 +298,12 @@ func (l *Lexer) readString() string {
 			case 'r':
 				out += "\r"
 			default:
-				// If unknown escape, just append the character as is (or keep backslash?)
-				// Standard behavior usually keeps backslash if not special, or ignores it.
-				// Let's just append the char.
 				out += string(l.ch)
 			}
 		} else {
 			out += string(l.ch)
 		}
+		l.readChar()
 	}
 	return out
 }
