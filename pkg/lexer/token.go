@@ -1,0 +1,84 @@
+package lexer
+
+import "strings"
+
+type TokenType string
+
+type Token struct {
+	Type    TokenType
+	Literal string
+	Line    int
+	Column  int
+}
+
+const (
+	ILLEGAL = "ILLEGAL"
+	EOF     = "EOF"
+
+	// Identifiers + Literals
+	IDENT  = "IDENT"  // add, foobar, x, y
+	INT    = "INT"    // 1343456
+	STRING = "STRING" // "foobar"
+
+	// Operators
+	ASSIGN   = "="
+	PLUS     = "+"
+	MINUS    = "-"
+	BANG     = "!"
+	ASTERISK = "*"
+	SLASH    = "/"
+
+	LT     = "<"
+	GT     = ">"
+	EQ     = "=="
+	NOT_EQ = "!="
+	LTE    = "<="
+	GTE    = ">="
+
+	// Delimiters
+	COMMA     = ","
+	SEMICOLON = ";"
+	COLON     = ":"
+	DOT       = "."
+
+	LPAREN   = "("
+	RPAREN   = ")"
+	LBRACE   = "{"
+	RBRACE   = "}"
+	LBRACKET = "["
+	RBRACKET = "]"
+
+	// Keywords
+	FUNGSI     = "FUNGSI"
+	JIKA       = "JIKA"
+	ATAU_JIKA  = "ATAU_JIKA"
+	LAINNYA    = "LAINNYA"
+	KEMBALIKAN = "KEMBALIKAN"
+	BENAR      = "BENAR"
+	SALAH      = "SALAH"
+	KOSONG     = "KOSONG"
+	AKHIR      = "AKHIR"
+	SELAMA     = "SELAMA"
+)
+
+var keywords = map[string]TokenType{
+	"fungsi":     FUNGSI,
+	"jika":       JIKA,
+	"atau_jika":  ATAU_JIKA,
+	"lainnya":    LAINNYA,
+	"kembalikan": KEMBALIKAN,
+	"benar":      BENAR,
+	"salah":      SALAH,
+	"kosong":     KOSONG,
+	"akhir":      AKHIR,
+	"selama":     SELAMA,
+}
+
+// LookupIdent checks if an identifier is a keyword (case-insensitive)
+func LookupIdent(ident string) TokenType {
+	lowerIdent := strings.ToLower(ident)
+	if tok, ok := keywords[lowerIdent]; ok {
+		return tok
+	}
+	return IDENT
+}

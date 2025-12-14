@@ -116,28 +116,28 @@ morph/
 ### **PHASE 1: Lexer (Week 2-3)**
 
 **Patch 1.1: Token Definitions**
-- [ ] Define `TokenType` enum (`pkg/lexer/token.go`)
-  - [ ] Keywords (fungsi, kembalikan, jika, etc)
-  - [ ] Literals (angka, teks, benar/salah)
-  - [ ] Operators (+, -, *, /, ==, !=, etc)
-  - [ ] Delimiters ({, }, (, ), [, ], etc)
-- [ ] Write 20 test cases untuk token types
+- [x] Define `TokenType` enum (`pkg/lexer/token.go`)
+  - [x] Keywords (fungsi, kembalikan, jika, etc)
+  - [x] Literals (angka, teks, benar/salah)
+  - [x] Operators (+, -, *, /, ==, !=, etc)
+  - [x] Delimiters ({, }, (, ), [, ], etc)
+- [x] Write 20 test cases untuk token types
 
 **Patch 1.2: Basic Lexer**
-- [ ] Implement `Lexer` struct (`pkg/lexer/lexer.go`)
-- [ ] Implement `NextToken()` method
-- [ ] Handle whitespace, comments
-- [ ] Write 30 test cases (identifiers, numbers, strings)
+- [x] Implement `Lexer` struct (`pkg/lexer/lexer.go`)
+- [x] Implement `NextToken()` method
+- [x] Handle whitespace, comments
+- [x] Write 30 test cases (identifiers, numbers, strings)
 
 **Patch 1.3: Advanced Lexing**
-- [ ] Handle multi-character operators (==, !=, <=, >=)
-- [ ] Handle string escapes (\n, \t, \", etc)
-- [ ] Error reporting (line/column numbers)
-- [ ] Write 30 test cases (edge cases, errors)
+- [x] Handle multi-character operators (==, !=, <=, >=)
+- [x] Handle string escapes (\n, \t, \", etc)
+- [x] Error reporting (line/column numbers)
+- [x] Write 30 test cases (edge cases, errors)
 
 **Deliverables:**
-- [ ] 80+ passing lexer tests
-- [ ] Can tokenize all valid Morph syntax
+- [x] 80+ passing lexer tests
+- [x] Can tokenize all valid Morph syntax
 
 ---
 
