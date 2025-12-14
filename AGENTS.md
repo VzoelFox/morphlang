@@ -2,7 +2,7 @@
 
 ```markdown
 # Morph Language - AI Agent Protocol
-**Version:** 1.0.0  
+**Version:** 1.0.1
 **Status:** LOCKED - Single Source of Truth  
 **Last Updated:** 2025-01-15
 
@@ -69,7 +69,7 @@ z = - 5       # VALID (unary with space)
 
 **Error message untuk no-space:**
 ```
-Error di [file.morph:3:8]:
+Error di [file.fox:3:8]:
   Binary operators require spaces around them
   
   3 | x = 10+5
@@ -188,7 +188,7 @@ Hint: <saran perbaikan konkret>
 
 **Code:**
 ```ruby
-# kalkulator.morph
+# kalkulator.fox
 fungsi bagi(a, b)
   jika b == 0
     kembalikan galat("Pembagian dengan nol")
@@ -209,7 +209,7 @@ utama()
 **Runtime Error Output:**
 
 ```
-Error di bagi() [kalkulator.morph:4:17]:
+Error di bagi() [kalkulator.fox:4:17]:
   Pembagian dengan nol
   
   4 |     kembalikan galat("Pembagian dengan nol")
@@ -217,9 +217,9 @@ Error di bagi() [kalkulator.morph:4:17]:
                            Division by zero occurred here
 
 Stack trace:
-  di bagi (kalkulator.morph:4)
-  di utama (kalkulator.morph:12)
-  di <main> (kalkulator.morph:17)
+  di bagi (kalkulator.fox:4)
+  di utama (kalkulator.fox:12)
+  di <main> (kalkulator.fox:17)
   
 Hint: Parameter 'b' bernilai 0. Cek nilai sebelum memanggil fungsi.
 ```
@@ -227,7 +227,7 @@ Hint: Parameter 'b' bernilai 0. Cek nilai sebelum memanggil fungsi.
 **Warning untuk unchecked error:**
 
 ```
-Warning [W001] di utama() [kalkulator.morph:13:10]:
+Warning [W001] di utama() [kalkulator.fox:13:10]:
   Function 'bagi()' dapat mengembalikan error tapi hasilnya tidak dicek
   
   13 |   cetak("Hasil: #{hasil}")
@@ -244,7 +244,7 @@ Hint: Tambahkan pengecekan error:
 **Syntax Error Output:**
 
 ```
-Error [E001] Syntax Error [kalkulator.morph:5:10]:
+Error [E001] Syntax Error [kalkulator.fox:5:10]:
   Missing space around binary operator
   
   5 |   hasil = a+b
@@ -258,20 +258,20 @@ Hint: Binary operators require spaces: a + b
 
 ## Context Management
 
-### Context File Format (.morph.ctx)
+### Context File Format (.fox.vz)
 
 **EVERY Morph file MUST generate context file untuk AI agent.**
 
-**Location:** Same directory as source file, dengan extension `.morph.ctx`
+**Location:** Same directory as source file, dengan extension `.fox.vz`
 
 **Format:** JSON
 
-**Example: `kalkulator.morph.ctx`**
+**Example: `kalkulator.fox.vz`**
 
 ```json
 {
   "version": "1.0.0",
-  "file": "kalkulator.morph",
+  "file": "kalkulator.fox",
   "timestamp": "2025-01-15T10:30:00Z",
   "checksum": "sha256:abc123def456...",
   
@@ -396,7 +396,7 @@ Hint: Binary operators require spaces: a + b
 
 1. **Load context file first**
    ```python
-   context = load_context("kalkulator.morph.ctx")
+   context = load_context("kalkulator.fox.vz")
    symbols = context["symbols"]
    errors = context["errors"]
    warnings = context["warnings"]
@@ -671,13 +671,13 @@ akhir
 
 1. **Request context file**
    ```
-   "Untuk debugging yang akurat, mohon share file .morph.ctx 
-    atau jalankan: morph compile --debug <file.morph>"
+   "Untuk debugging yang akurat, mohon share file .fox.vz
+    atau jalankan: morph compile --debug <file.fox>"
    ```
 
 2. **Load and analyze context**
    ```python
-   context = load_context(file + ".ctx")
+   context = load_context(file + ".vz")
    
    # Check for immediate issues
    if context["errors"]:
@@ -716,7 +716,7 @@ akhir
    ```
    Bug teridentifikasi:
    
-   File: kalkulator.morph
+   File: kalkulator.fox
    Baris: 13
    Masalah: Unchecked error dari fungsi bagi()
    
@@ -748,21 +748,21 @@ akhir
 **AI agent dapat request debug mode compile:**
 
 ```bash
-morph compile --debug kalkulator.morph
+morph compile --debug kalkulator.fox
 ```
 
 **Debug output includes:**
 
 ```
 === Morph Compiler Debug Output ===
-File: kalkulator.morph
+File: kalkulator.fox
 Compiled: 2025-01-15 10:30:00
 
 --- Lexer Output ---
 Tokens generated: 47
 
 Line 1:
-  1:1   COMMENT    "# kalkulator.morph"
+  1:1   COMMENT    "# kalkulator.fox"
 
 Line 2:
   2:1   FUNGSI     "fungsi"
@@ -849,7 +849,7 @@ bagi -> (no calls)
 2. Consider adding parameter validation in 'bagi'
 
 --- Context File ---
-Generated: kalkulator.morph.ctx (2.1 KB)
+Generated: kalkulator.fox.vz (2.1 KB)
 ```
 
 ---
@@ -955,21 +955,21 @@ Catatan:
   "project": {
     "name": "Kalkulator App",
     "root_dir": "/path/to/project",
-    "main_file": "kalkulator.morph"
+    "main_file": "kalkulator.fox"
   },
   
   "files": [
     {
-      "path": "kalkulator.morph",
+      "path": "kalkulator.fox",
       "checksum": "sha256:abc123...",
       "last_modified": "2025-01-15T10:25:00Z",
-      "context_file": "kalkulator.morph.ctx"
+      "context_file": "kalkulator.fox.vz"
     },
     {
-      "path": "utils.morph",
+      "path": "utils.fox",
       "checksum": "sha256:def456...",
       "last_modified": "2025-01-15T10:20:00Z",
-      "context_file": "utils.morph.ctx"
+      "context_file": "utils.fox.vz"
     }
   ],
   
@@ -978,10 +978,10 @@ Catatan:
       "id": 1,
       "timestamp": "2025-01-15T10:01:00Z",
       "user": "Buat fungsi untuk membagi dua angka",
-      "assistant": "Saya buat fungsi bagi() di kalkulator.morph",
+      "assistant": "Saya buat fungsi bagi() di kalkulator.fox",
       "confidence": 0.95,
       "changes": {
-        "file": "kalkulator.morph",
+        "file": "kalkulator.fox",
         "type": "function_added",
         "details": {
           "function_name": "bagi",
@@ -1010,7 +1010,7 @@ Catatan:
       "assistant": "Saya buat fungsi utama() dengan test case",
       "confidence": 0.9,
       "changes": {
-        "file": "kalkulator.morph",
+        "file": "kalkulator.fox",
         "type": "function_added",
         "details": {
           "function_name": "utama",
@@ -1029,12 +1029,12 @@ Catatan:
   ],
   
   "known_symbols": {
-    "kalkulator.morph": {
+    "kalkulator.fox": {
       "functions": ["bagi", "utama"],
       "variables": [],
       "imports": []
     },
-    "utils.morph": {
+    "utils.fox": {
       "functions": ["helper"],
       "variables": [],
       "imports": []
@@ -1054,14 +1054,14 @@ Catatan:
       "id": 1,
       "description": "Fix warning W001 di fungsi utama",
       "priority": "high",
-      "file": "kalkulator.morph",
+      "file": "kalkulator.fox",
       "line": 13
     },
     {
       "id": 2,
       "description": "Tambahkan fungsi perkalian",
       "priority": "medium",
-      "file": "kalkulator.morph"
+      "file": "kalkulator.fox"
     }
   ],
   
@@ -1252,7 +1252,7 @@ fungsi test()
 
 **Error Output:**
 ```
-Error [E001] Syntax Error [test.morph:2:9]:
+Error [E001] Syntax Error [test.fox:2:9]:
   Missing spaces around binary operator
   
   2 |   x = 10+5
@@ -1281,7 +1281,7 @@ akhir
 
 **Error Output:**
 ```
-Error [E002] Undefined Symbol [test.morph:2:7]:
+Error [E002] Undefined Symbol [test.fox:2:7]:
   Variable 'y' belum didefinisikan
   
   2 |   x = y + 5
@@ -1310,7 +1310,7 @@ akhir
 
 **Error Output:**
 ```
-Error [E003] Type Mismatch [test.morph:3:7]:
+Error [E003] Type Mismatch [test.fox:3:7]:
   Tidak bisa melakukan operasi '+' pada string dan integer
   
   3 |   y = x + 5
@@ -1340,7 +1340,7 @@ akhir
 
 **Warning Output:**
 ```
-Warning [W001] [test.morph:3:9]:
+Warning [W001] [test.fox:3:9]:
   Fungsi 'bagi' dapat mengembalikan error tapi tidak dicek
   
   3 |   cetak(hasil)
@@ -1361,7 +1361,7 @@ Hint: Tambahkan pengecekan:
 ### Before Generating Code
 
 **Context Loading:**
-- [ ] Load `.morph.ctx` file untuk semua file terkait
+- [ ] Load `.fox.vz` file untuk semua file terkait
 - [ ] Load `.morph.session` jika ada (resume state)
 - [ ] Verify checksums (check if files modified)
 - [ ] Rebuild symbol table dari context
@@ -1672,24 +1672,19 @@ Confidence: LOW - fungsi logging belum ada"
 **Automated checks:**
 ```bash
 # Check for errors
-morph compile --check *.morph
+morph compile --check *.fox
 
 # Check for warnings
-morph compile --warn *.morph
+morph compile --warn *.fox
 
 # Generate coverage report
-morph compile --coverage *.morph
+morph compile --coverage *.fox
 
 # Validate context files
-morph validate-context *.morph.ctx
+morph validate-context *.fox.vz
 ```
 
 ---
-
-## .morph = .fox
-## .ctx = .vz
-
-
 
 ## DOKUMENTASI INI DIBUAT PADA MINGGU, 14 DESEMBER 2025
 

@@ -57,19 +57,19 @@ morph/
 ├── test/
 │   ├── fixtures/           # Test morph programs
 │   │   ├── valid/
-│   │   │   ├── hello.morph
-│   │   │   ├── fibonacci.morph
+│   │   │   ├── hello.fox
+│   │   │   ├── fibonacci.fox
 │   │   │   └── ...
 │   │   └── invalid/
-│   │       ├── syntax_error_1.morph
+│   │       ├── syntax_error_1.fox
 │   │       └── ...
 │   │
 │   └── integration/        # Integration tests
 │       └── ...
 │
 ├── examples/               # Example programs
-│   ├── hello_world.morph
-│   ├── calculator.morph
+│   ├── hello_world.fox
+│   ├── calculator.fox
 │   └── ...
 │
 ├── docs/
@@ -97,17 +97,17 @@ morph/
 ### **PHASE 0: Project Setup (Week 1)**
 
 **Deliverables:**
-- [ ] Initialize Go module (`go mod init github.com/VzoelFox/morphlang`)
-- [ ] Create folder structure (sesuai di atas)
-- [ ] Setup `.gitignore` (Go standard + IDE files)
-- [ ] Write `README.md` (project description, build instructions)
-- [ ] Write `docs/spec.md` (5-10 halaman language spec)
-  - [ ] Syntax examples
-  - [ ] Type system
-  - [ ] Control flow
-  - [ ] Function declaration
-  - [ ] Scoping rules
-- [ ] Setup CI/CD (GitHub Actions untuk run tests)
+- [x] Initialize Go module (`go mod init github.com/VzoelFox/morphlang`)
+- [x] Create folder structure (sesuai di atas)
+- [x] Setup `.gitignore` (Go standard + IDE files)
+- [x] Write `README.md` (project description, build instructions)
+- [x] Write `docs/spec.md` (5-10 halaman language spec)
+  - [x] Syntax examples
+  - [x] Type system
+  - [x] Control flow
+  - [x] Function declaration
+  - [x] Scoping rules
+- [x] Setup CI/CD (GitHub Actions untuk run tests)
 
 **Output:** Empty project structure dengan spec document
 
@@ -116,75 +116,75 @@ morph/
 ### **PHASE 1: Lexer (Week 2-3)**
 
 **Patch 1.1: Token Definitions**
-- [ ] Define `TokenType` enum (`pkg/lexer/token.go`)
-  - [ ] Keywords (fungsi, kembalikan, jika, etc)
-  - [ ] Literals (angka, teks, benar/salah)
-  - [ ] Operators (+, -, *, /, ==, !=, etc)
-  - [ ] Delimiters ({, }, (, ), [, ], etc)
-- [ ] Write 20 test cases untuk token types
+- [x] Define `TokenType` enum (`pkg/lexer/token.go`)
+  - [x] Keywords (fungsi, kembalikan, jika, etc)
+  - [x] Literals (angka, teks, benar/salah)
+  - [x] Operators (+, -, *, /, ==, !=, etc)
+  - [x] Delimiters ({, }, (, ), [, ], etc)
+- [x] Write 20 test cases untuk token types
 
 **Patch 1.2: Basic Lexer**
-- [ ] Implement `Lexer` struct (`pkg/lexer/lexer.go`)
-- [ ] Implement `NextToken()` method
-- [ ] Handle whitespace, comments
-- [ ] Write 30 test cases (identifiers, numbers, strings)
+- [x] Implement `Lexer` struct (`pkg/lexer/lexer.go`)
+- [x] Implement `NextToken()` method
+- [x] Handle whitespace, comments
+- [x] Write 30 test cases (identifiers, numbers, strings)
 
 **Patch 1.3: Advanced Lexing**
-- [ ] Handle multi-character operators (==, !=, <=, >=)
-- [ ] Handle string escapes (\n, \t, \", etc)
-- [ ] Error reporting (line/column numbers)
-- [ ] Write 30 test cases (edge cases, errors)
+- [x] Handle multi-character operators (==, !=, <=, >=)
+- [x] Handle string escapes (\n, \t, \", etc)
+- [x] Error reporting (line/column numbers)
+- [x] Write 30 test cases (edge cases, errors)
 
 **Deliverables:**
-- [ ] 80+ passing lexer tests
-- [ ] Can tokenize all valid Morph syntax
+- [x] 80+ passing lexer tests
+- [x] Can tokenize all valid Morph syntax
 
 ---
 
 ### **PHASE 2: Parser (Week 4-6)**
 
 **Patch 2.1: AST Definitions**
-- [ ] Define AST node interfaces (`pkg/parser/ast.go`)
-  - [ ] `Expression` interface
-  - [ ] `Statement` interface
-  - [ ] `Program` node (root)
-- [ ] Implement concrete nodes:
-  - [ ] `IntegerLiteral`, `StringLiteral`, `BooleanLiteral`
-  - [ ] `Identifier`
-  - [ ] `BinaryExpression` (+, -, *, /, etc)
-- [ ] Write 15 test cases (AST node creation)
+- [x] Define AST node interfaces (`pkg/parser/ast.go`)
+  - [x] `Expression` interface
+  - [x] `Statement` interface
+  - [x] `Program` node (root)
+- [x] Implement concrete nodes:
+  - [x] `IntegerLiteral`, `StringLiteral`, `BooleanLiteral`
+  - [x] `Identifier`
+  - [x] `BinaryExpression` (+, -, *, /, etc)
+- [x] Write 15 test cases (AST node creation)
 
 **Patch 2.2: Expression Parser**
-- [ ] Implement `Parser` struct (`pkg/parser/parser.go`)
-- [ ] Implement Pratt parser untuk expressions
-  - [ ] Precedence table
-  - [ ] Prefix parsers (literals, identifiers, -x, !x)
-  - [ ] Infix parsers (binary ops, function calls)
-- [ ] Write 40 test cases (expressions)
+- [x] Implement `Parser` struct (`pkg/parser/parser.go`)
+- [x] Implement Pratt parser untuk expressions
+  - [x] Precedence table
+  - [x] Prefix parsers (literals, identifiers, -x, !x)
+  - [x] Infix parsers (binary ops, function calls)
+- [x] Write 40 test cases (expressions)
 
 **Patch 2.3: Statement Parser**
-- [ ] Parse variable declarations (`var x = 10`)
-- [ ] Parse assignments (`x = 20`)
-- [ ] Parse return statements
-- [ ] Parse if/else
-- [ ] Parse while loops
-- [ ] Write 40 test cases (statements)
+- [x] Parse variable declarations (`var x = 10`)
+- [x] Parse assignments (`x = 20`)
+- [x] Parse return statements
+- [x] Parse if/else
+- [x] Parse while loops
+- [x] Write 40 test cases (statements)
 
 **Patch 2.4: Function Parser**
-- [ ] Parse function declarations
-- [ ] Parse function calls
-- [ ] Parse blocks `{ ... }`
-- [ ] Write 30 test cases (functions)
+- [x] Parse function declarations
+- [x] Parse function calls
+- [x] Parse blocks `{ ... }`
+- [x] Write 30 test cases (functions)
 
 **Patch 2.5: Error Recovery**
-- [ ] Implement error reporting (line, column, message)
-- [ ] Add panic mode recovery
-- [ ] Write 20 test cases (syntax errors)
+- [x] Implement error reporting (line, column, message)
+- [x] Add panic mode recovery
+- [x] Write 20 test cases (syntax errors)
 
 **Deliverables:**
-- [ ] 145+ passing parser tests
-- [ ] Can parse all valid Morph syntax
-- [ ] Clear error messages untuk invalid syntax
+- [x] 145+ passing parser tests
+- [x] Can parse all valid Morph syntax
+- [x] Clear error messages untuk invalid syntax
 
 ---
 
@@ -252,11 +252,11 @@ morph/
 - [ ] Write usage documentation
 
 **Patch 4.3: Examples**
-- [ ] Write `hello_world.morph`
-- [ ] Write `fibonacci.morph`
-- [ ] Write `calculator.morph`
-- [ ] Write `faktorial.morph`
-- [ ] Write `sorting.morph`
+- [ ] Write `hello_world.fox`
+- [ ] Write `fibonacci.fox`
+- [ ] Write `calculator.fox`
+- [ ] Write `faktorial.fox`
+- [ ] Write `sorting.fox`
 
 **Patch 4.4: Documentation**
 - [ ] Write `docs/tutorial.md` (getting started guide)
