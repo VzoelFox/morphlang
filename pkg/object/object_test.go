@@ -1,12 +1,6 @@
 package object
 
-import (
-	"testing"
-)
-
-func TestStringHash(t *testing.T) {
-	// Placeholder for hash tests if we implement Hashable interface later
-}
+import "testing"
 
 func TestObjectInspect(t *testing.T) {
 	tests := []struct {
@@ -14,18 +8,22 @@ func TestObjectInspect(t *testing.T) {
 		expected string
 	}{
 		{&Integer{Value: 10}, "10"},
+		{&Integer{Value: -5}, "-5"},
 		{&Boolean{Value: true}, "benar"},
 		{&Boolean{Value: false}, "salah"},
-		{&String{Value: "Halo"}, "Halo"},
 		{&Null{}, "kosong"},
-		{&Error{Message: "terjadi kesalahan"}, "ERROR: terjadi kesalahan"},
+		{&String{Value: "Halo"}, "Halo"},
+		{&String{Value: ""}, ""},
+		{&String{Value: "Morph Language"}, "Morph Language"},
+		{&Error{Message: "Salah"}, "ERROR: Salah"},
+		{&Error{Message: "Division by zero"}, "ERROR: Division by zero"},
 		{&ReturnValue{Value: &Integer{Value: 5}}, "5"},
+		{&ReturnValue{Value: &Boolean{Value: true}}, "benar"},
 	}
 
 	for _, tt := range tests {
 		if tt.obj.Inspect() != tt.expected {
-			t.Errorf("wrong inspect value. expected=%q, got=%q",
-				tt.expected, tt.obj.Inspect())
+			t.Errorf("Inspect() wrong. expected=%q, got=%q", tt.expected, tt.obj.Inspect())
 		}
 	}
 }
@@ -37,16 +35,15 @@ func TestObjectType(t *testing.T) {
 	}{
 		{&Integer{Value: 10}, INTEGER_OBJ},
 		{&Boolean{Value: true}, BOOLEAN_OBJ},
-		{&String{Value: "Halo"}, STRING_OBJ},
 		{&Null{}, NULL_OBJ},
-		{&Error{Message: "msg"}, ERROR_OBJ},
+		{&String{Value: "Halo"}, STRING_OBJ},
+		{&Error{Message: "Err"}, ERROR_OBJ},
 		{&ReturnValue{Value: &Integer{Value: 5}}, RETURN_VALUE_OBJ},
 	}
 
 	for _, tt := range tests {
 		if tt.obj.Type() != tt.expected {
-			t.Errorf("wrong type. expected=%q, got=%q",
-				tt.expected, tt.obj.Type())
+			t.Errorf("Type() wrong. expected=%q, got=%q", tt.expected, tt.obj.Type())
 		}
 	}
 }
