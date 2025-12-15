@@ -119,6 +119,44 @@ func (c *Compiler) Compile(node parser.Node) error {
 		afterAlternativePos := len(c.instructions)
 		c.changeOperand(jumpPos, afterAlternativePos)
 
+	case *parser.WhileExpression:
+		// 1. Initialize result with Null (in case loop never runs)
+		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+
+		loopStartPos := len(c.instructions)
+
+		// 2. Condition
+		err := c.Compile(node.Condition)
+		if err != nil {
+			return err
+		}
+
+		// 3. Jump if False to End
+		jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
+
+		// 4. Pop previous result (prepare stack for new iteration result)
+		c.emit(OpPop)
+
+		// 5. Body
+		err = c.Compile(node.Body)
+		if err != nil {
+			return err
+		}
+
+		if c.lastInstruction.Opcode == OpPop {
+			c.removeLastPop()
+		} else {
+			// If body didn't end with expression, push Null
+			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		}
+
+		// 6. Jump back to Start
+		c.emit(OpJump, loopStartPos)
+
+		// 7. Patch JumpNotTruthy
+		afterLoopPos := len(c.instructions)
+		c.changeOperand(jumpNotTruthyPos, afterLoopPos)
+
 	case *parser.InfixExpression:
 		if node.Operator == "<" {
 			err := c.Compile(node.Right)

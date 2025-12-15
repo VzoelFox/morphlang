@@ -177,6 +177,20 @@ func TestIndexExpressions(t *testing.T) {
 	runVmTests(t, tests)
 }
 
+func TestWhileLoops(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{"selama (salah) 10 akhir", nil},
+		{"x = 0; selama (x < 3) x = x + 1 akhir; x", 3},
+		{"x = 0; y = 0; selama (x < 3) x = x + 1; y = y + 2; akhir; y", 6},
+		{"x = 0; selama (x < 3) x = x + 1; x; akhir", 3},
+	}
+
+	runVmTests(t, tests)
+}
+
 func runVmTests(t *testing.T, tests interface{}) {
 	switch tests := tests.(type) {
 	case []struct {
