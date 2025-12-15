@@ -15,8 +15,8 @@ func TestObjectInspect(t *testing.T) {
 		{&String{Value: "Halo"}, "Halo"},
 		{&String{Value: ""}, ""},
 		{&String{Value: "Morph Language"}, "Morph Language"},
-		{&Error{Message: "Salah"}, "ERROR: Salah"},
-		{&Error{Message: "Division by zero"}, "ERROR: Division by zero"},
+		{&Error{Message: "Salah"}, "Error di [:0:0]:\n  Salah\n"},
+		{&Error{Message: "Division by zero"}, "Error di [:0:0]:\n  Division by zero\n"},
 		{&ReturnValue{Value: &Integer{Value: 5}}, "5"},
 		{&ReturnValue{Value: &Boolean{Value: true}}, "benar"},
 	}
