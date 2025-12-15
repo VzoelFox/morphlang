@@ -197,31 +197,31 @@ morph/
 ### **PHASE 3: Tree-Walking Interpreter (Week 7-9)**
 
 **Patch 3.1: Object System**
-- [ ] Define `Object` interface (`pkg/object/object.go`)
-- [ ] Implement types:
-  - [ ] `Integer`, `String`, `Boolean`
+- [x] Define `Object` interface (`pkg/object/object.go`)
+- [x] Implement types:
+  - [x] `Integer`, `String`, `Boolean`
   - [ ] `Function`
-  - [ ] `Null`, `Error`
-- [ ] Write 15 test cases
+  - [x] `Null`, `Error`
+- [x] Write 15 test cases
 
 **Patch 3.2: Environment**
-- [ ] Implement `Environment` (variable storage)
-- [ ] Handle scoping (nested environments)
-- [ ] Write 20 test cases
+- [x] Implement `Environment` (variable storage)
+- [x] Handle scoping (nested environments)
+- [x] Write 20 test cases
 
 **Patch 3.3: Expression Evaluator**
-- [ ] Implement `Eval()` untuk literals
-- [ ] Implement binary operators (+, -, *, /, ==, !=, etc)
-- [ ] Implement unary operators (-, !)
-- [ ] Write 40 test cases
+- [x] Implement `Eval()` untuk literals
+- [x] Implement binary operators (+, -, *, /, ==, !=, etc)
+- [x] Implement unary operators (-, !)
+- [x] Write 40 test cases
 
 **Patch 3.4: Statement Evaluator**
-- [ ] Eval variable declarations
-- [ ] Eval assignments
-- [ ] Eval return statements
-- [ ] Eval if/else
+- [x] Eval variable declarations (Implicit via assignment)
+- [x] Eval assignments
+- [x] Eval return statements
+- [x] Eval if/else
 - [ ] Eval while loops
-- [ ] Write 40 test cases
+- [x] Write 40 test cases
 
 **Patch 3.5: Function Calls**
 - [ ] Eval function declarations
