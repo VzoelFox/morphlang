@@ -9,6 +9,11 @@ import (
 
 const StackSize = 2048
 
+var (
+	True  = &object.Boolean{Value: true}
+	False = &object.Boolean{Value: false}
+)
+
 type VM struct {
 	constants    []object.Object
 	instructions compiler.Instructions
@@ -53,8 +58,39 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan:
+			err := vm.executeComparison(op)
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpBang:
+			err := vm.executeBangOperator()
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpMinus:
+			err := vm.executeMinusOperator()
+			if err != nil {
+				return err
+			}
+
 		case compiler.OpPop:
 			vm.pop()
+
+		case compiler.OpJump:
+			pos := int(compiler.ReadUint16(vm.instructions[ip+1:]))
+			ip = pos - 1
+
+		case compiler.OpJumpNotTruthy:
+			pos := int(compiler.ReadUint16(vm.instructions[ip+1:]))
+			ip += 2
+
+			condition := vm.pop()
+			if !isTruthy(condition) {
+				ip = pos - 1
+			}
 		}
 	}
 
@@ -113,4 +149,76 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 	}
 
 	return vm.push(&object.Integer{Value: result})
+}
+
+func (vm *VM) executeComparison(op compiler.Opcode) error {
+	right := vm.pop()
+	left := vm.pop()
+
+	if left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ {
+		return vm.executeIntegerComparison(op, left, right)
+	}
+
+	switch op {
+	case compiler.OpEqual:
+		return vm.push(nativeBoolToBooleanObject(left == right || (left.Type() == object.BOOLEAN_OBJ && right.Type() == object.BOOLEAN_OBJ && left.(*object.Boolean).Value == right.(*object.Boolean).Value)))
+	case compiler.OpNotEqual:
+		return vm.push(nativeBoolToBooleanObject(left != right && !(left.Type() == object.BOOLEAN_OBJ && right.Type() == object.BOOLEAN_OBJ && left.(*object.Boolean).Value == right.(*object.Boolean).Value)))
+	default:
+		return fmt.Errorf("unknown operator: %d (%s %s)", op, left.Type(), right.Type())
+	}
+}
+
+func (vm *VM) executeIntegerComparison(op compiler.Opcode, left, right object.Object) error {
+	leftVal := left.(*object.Integer).Value
+	rightVal := right.(*object.Integer).Value
+
+	switch op {
+	case compiler.OpEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal == rightVal))
+	case compiler.OpNotEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal != rightVal))
+	case compiler.OpGreaterThan:
+		return vm.push(nativeBoolToBooleanObject(leftVal > rightVal))
+	default:
+		return fmt.Errorf("unknown integer operator: %d", op)
+	}
+}
+
+func (vm *VM) executeBangOperator() error {
+	operand := vm.pop()
+
+	if isTruthy(operand) {
+		return vm.push(False)
+	}
+	return vm.push(True)
+}
+
+func (vm *VM) executeMinusOperator() error {
+	operand := vm.pop()
+
+	if operand.Type() != object.INTEGER_OBJ {
+		return fmt.Errorf("unsupported type for negation: %s", operand.Type())
+	}
+
+	value := operand.(*object.Integer).Value
+	return vm.push(&object.Integer{Value: -value})
+}
+
+func isTruthy(obj object.Object) bool {
+	switch obj := obj.(type) {
+	case *object.Boolean:
+		return obj.Value
+	case *object.Null:
+		return false
+	default:
+		return true
+	}
+}
+
+func nativeBoolToBooleanObject(input bool) *object.Boolean {
+	if input {
+		return True
+	}
+	return False
 }

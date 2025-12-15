@@ -7,15 +7,24 @@ import (
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
 
+type EmittedInstruction struct {
+	Opcode   Opcode
+	Position int
+}
+
 type Compiler struct {
-	instructions Instructions
-	constants    []object.Object
+	instructions        Instructions
+	constants           []object.Object
+	lastInstruction     EmittedInstruction
+	previousInstruction EmittedInstruction
 }
 
 func New() *Compiler {
 	return &Compiler{
-		instructions: Instructions{},
-		constants:    []object.Object{},
+		instructions:        Instructions{},
+		constants:           []object.Object{},
+		lastInstruction:     EmittedInstruction{},
+		previousInstruction: EmittedInstruction{},
 	}
 }
 
@@ -30,14 +39,65 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 	case *parser.ExpressionStatement:
+		if node.Expression == nil {
+			return nil
+		}
 		err := c.Compile(node.Expression)
 		if err != nil {
 			return err
 		}
 		c.emit(OpPop)
 
+	case *parser.BlockStatement:
+		for _, s := range node.Statements {
+			err := c.Compile(s)
+			if err != nil {
+				return err
+			}
+		}
+
+	case *parser.IfExpression:
+		err := c.Compile(node.Condition)
+		if err != nil {
+			return err
+		}
+
+		// Jump over consequence if condition is false
+		jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
+
+		err = c.Compile(node.Consequence)
+		if err != nil {
+			return err
+		}
+
+		if c.lastInstruction.Opcode == OpPop {
+			c.removeLastPop()
+		}
+
+		// Jump over alternative if consequence was executed
+		jumpPos := c.emit(OpJump, 9999)
+
+		afterConsequencePos := len(c.instructions)
+		c.changeOperand(jumpNotTruthyPos, afterConsequencePos)
+
+		if node.Alternative == nil {
+			// If no alternative, we need to push NULL so the expression has a value
+			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		} else {
+			err = c.Compile(node.Alternative)
+			if err != nil {
+				return err
+			}
+
+			if c.lastInstruction.Opcode == OpPop {
+				c.removeLastPop()
+			}
+		}
+
+		afterAlternativePos := len(c.instructions)
+		c.changeOperand(jumpPos, afterAlternativePos)
+
 	case *parser.InfixExpression:
-		// Re-order for comparison operators < and <=
 		if node.Operator == "<" {
 			err := c.Compile(node.Right)
 			if err != nil {
@@ -50,14 +110,6 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpGreaterThan)
 			return nil
 		}
-		// TODO: Handle <= if/when we have it, or transform it.
-		// For now we only have OpGreaterThan in opcodes?
-		// Spec has:
-		// 0x26 | GT | - | Pop b, Pop a, Push a > b.
-		// 0x27 | GTE | - | Pop b, Pop a, Push a >= b.
-		// It doesn't seem to have LT or LTE. The standard way is to swap operands.
-		// a < b  <=> b > a
-		// a <= b <=> b >= a
 
 		err := c.Compile(node.Left)
 		if err != nil {
@@ -88,9 +140,28 @@ func (c *Compiler) Compile(node parser.Node) error {
 			return fmt.Errorf("unknown operator %s", node.Operator)
 		}
 
+	case *parser.PrefixExpression:
+		err := c.Compile(node.Right)
+		if err != nil {
+			return err
+		}
+
+		switch node.Operator {
+		case "!":
+			c.emit(OpBang)
+		case "-":
+			c.emit(OpMinus)
+		default:
+			return fmt.Errorf("unknown operator %s", node.Operator)
+		}
+
 	case *parser.IntegerLiteral:
 		integer := &object.Integer{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(integer))
+
+	case *parser.BooleanLiteral:
+		boolean := &object.Boolean{Value: node.Value}
+		c.emit(OpLoadConst, c.addConstant(boolean))
 	}
 
 	return nil
@@ -116,6 +187,9 @@ func (c *Compiler) addConstant(obj object.Object) int {
 func (c *Compiler) emit(op Opcode, operands ...int) int {
 	ins := Make(op, operands...)
 	pos := c.addInstruction(ins)
+
+	c.setLastInstruction(op, pos)
+
 	return pos
 }
 
@@ -123,4 +197,30 @@ func (c *Compiler) addInstruction(ins []byte) int {
 	posNewInstruction := len(c.instructions)
 	c.instructions = append(c.instructions, ins...)
 	return posNewInstruction
+}
+
+func (c *Compiler) setLastInstruction(op Opcode, pos int) {
+	previous := c.lastInstruction
+	last := EmittedInstruction{Opcode: op, Position: pos}
+
+	c.previousInstruction = previous
+	c.lastInstruction = last
+}
+
+func (c *Compiler) removeLastPop() {
+	c.instructions = c.instructions[:c.lastInstruction.Position]
+	c.lastInstruction = c.previousInstruction
+}
+
+func (c *Compiler) replaceInstruction(pos int, newInstruction []byte) {
+	for i := 0; i < len(newInstruction); i++ {
+		c.instructions[pos+i] = newInstruction[i]
+	}
+}
+
+func (c *Compiler) changeOperand(opPos int, operand int) {
+	op := Opcode(c.instructions[opPos])
+	newInstruction := Make(op, operand)
+
+	c.replaceInstruction(opPos, newInstruction)
 }
