@@ -200,7 +200,7 @@ morph/
 - [x] Define `Object` interface (`pkg/object/object.go`)
 - [x] Implement types:
   - [x] `Integer`, `String`, `Boolean`
-  - [ ] `Function`
+  - [x] `Function`
   - [x] `Null`, `Error`
 - [x] Write 15 test cases
 
@@ -220,26 +220,26 @@ morph/
 - [x] Eval assignments
 - [x] Eval return statements
 - [x] Eval if/else
-- [ ] Eval while loops
+- [x] Eval while loops
 - [x] Write 40 test cases
 
 **Patch 3.5: Function Calls**
-- [ ] Eval function declarations
-- [ ] Eval function calls
-- [ ] Handle parameters dan arguments
-- [ ] Handle recursion
-- [ ] Write 30 test cases
+- [x] Eval function declarations
+- [x] Eval function calls
+- [x] Handle parameters dan arguments
+- [x] Handle recursion
+- [x] Write 30 test cases
 
 **Patch 3.6: Built-in Functions**
-- [ ] Implement `cetak()` (print)
-- [ ] Implement `panjang()` (length)
-- [ ] Implement `tipe()` (type)
-- [ ] Write 15 test cases
+- [x] Implement `cetak()` (print)
+- [x] Implement `panjang()` (length)
+- [x] Implement `tipe()` (type)
+- [x] Write 15 test cases
 
 **Deliverables:**
-- [ ] 160+ passing evaluator tests
-- [ ] Can run simple Morph programs
-- [ ] REPL working (`cmd/morphi`)
+- [x] 160+ passing evaluator tests
+- [x] Can run simple Morph programs
+- [x] REPL working (`cmd/morphi`)
 
 ---
 
