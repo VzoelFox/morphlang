@@ -200,7 +200,7 @@ morph/
 - [x] Define `Object` interface (`pkg/object/object.go`)
 - [x] Implement types:
   - [x] `Integer`, `String`, `Boolean`
-  - [ ] `Function`
+  - [x] `Function`
   - [x] `Null`, `Error`
 - [x] Write 15 test cases
 
