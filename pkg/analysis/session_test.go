@@ -136,3 +136,45 @@ akhir
 		t.Error("Expected return type to be union (error)")
 	}
 }
+
+func TestAnalysisVariableTypes(t *testing.T) {
+	input := `
+# Global variables type test
+x = 10
+y = "halo"
+z = benar
+`
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		t.Fatalf("Parser has errors: %v", p.Errors())
+	}
+
+	ctx, err := GenerateContext(program, "types.morph", input, nil)
+	if err != nil {
+		t.Fatalf("GenerateContext failed: %v", err)
+	}
+
+	// Verify 'x' is integer
+	if v, ok := ctx.GlobalVars["x"]; !ok {
+		t.Error("Global variable 'x' not found")
+	} else if v.Type != "integer" {
+		t.Errorf("Expected x to be integer, got %s", v.Type)
+	}
+
+	// Verify 'y' is string
+	if v, ok := ctx.GlobalVars["y"]; !ok {
+		t.Error("Global variable 'y' not found")
+	} else if v.Type != "string" {
+		t.Errorf("Expected y to be string, got %s", v.Type)
+	}
+
+	// Verify 'z' is boolean
+	if v, ok := ctx.GlobalVars["z"]; !ok {
+		t.Error("Global variable 'z' not found")
+	} else if v.Type != "boolean" {
+		t.Errorf("Expected z to be boolean, got %s", v.Type)
+	}
+}

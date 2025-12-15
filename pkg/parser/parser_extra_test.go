@@ -100,7 +100,7 @@ func TestStrictWhitespaceErrors(t *testing.T) {
 
 		found := false
 		for _, err := range p.Errors() {
-			if strings.Contains(err, tt.errorMsgPart) {
+			if strings.Contains(err.Message, tt.errorMsgPart) {
 				found = true
 				break
 			}
@@ -125,7 +125,7 @@ func TestDetailedErrorFormatting(t *testing.T) {
 
 	err := p.Errors()[0]
 	// Check format
-	if !strings.Contains(err, "Error [") {
+	if !strings.Contains(err.String(), "ERROR [") {
 		t.Errorf("Error format wrong: %s", err)
 	}
 }
