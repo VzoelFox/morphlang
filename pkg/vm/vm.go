@@ -23,6 +23,7 @@ type VM struct {
 
 	stack [StackSize]object.Object
 	sp    int // Always points to the next value. Top of stack is stack[sp-1]
+	bp    int // Base Pointer for local variables (start of current frame)
 
 	LastPoppedStackElem object.Object
 }
@@ -33,6 +34,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 		constants:    bytecode.Constants,
 		globals:      make([]object.Object, GlobalSize),
 		sp:           0,
+		bp:           0,
 	}
 }
 
@@ -105,6 +107,19 @@ func (vm *VM) Run() error {
 			globalIndex := compiler.ReadUint16(vm.instructions[ip+1:])
 			ip += 2
 			err := vm.push(vm.globals[globalIndex])
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpStoreLocal:
+			localIndex := int(vm.instructions[ip+1])
+			ip += 1
+			vm.stack[vm.bp+localIndex] = vm.pop()
+
+		case compiler.OpLoadLocal:
+			localIndex := int(vm.instructions[ip+1])
+			ip += 1
+			err := vm.push(vm.stack[vm.bp+localIndex])
 			if err != nil {
 				return err
 			}
