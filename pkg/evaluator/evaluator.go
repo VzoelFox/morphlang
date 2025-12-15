@@ -63,6 +63,8 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 		return evalInfixExpression(node.Operator, left, right)
 	case *parser.IfExpression:
 		return evalIfExpression(node, env)
+	case *parser.WhileExpression:
+		return evalWhileExpression(node, env)
 	case *parser.Identifier:
 		return evalIdentifier(node, env)
 	case *parser.FunctionLiteral:
@@ -290,6 +292,27 @@ func evalIfExpression(ie *parser.IfExpression, env *object.Environment) object.O
 	} else {
 		return NULL
 	}
+}
+
+func evalWhileExpression(we *parser.WhileExpression, env *object.Environment) object.Object {
+	var result object.Object = NULL
+
+	for {
+		condition := Eval(we.Condition, env)
+		if isError(condition) {
+			return condition
+		}
+
+		if !isTruthy(condition) {
+			break
+		}
+
+		result = Eval(we.Body, env)
+		if result != nil && (result.Type() == object.RETURN_VALUE_OBJ || result.Type() == object.ERROR_OBJ) {
+			return result
+		}
+	}
+	return result
 }
 
 func isTruthy(obj object.Object) bool {
