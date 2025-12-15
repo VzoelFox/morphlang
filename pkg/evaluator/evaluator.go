@@ -100,7 +100,7 @@ func evalExpressions(exps []parser.Expression, env *object.Environment) []object
 func applyFunction(fn object.Object, args []object.Object) object.Object {
 	function, ok := fn.(*object.Function)
 	if !ok {
-		return newError("not a function: %s", fn.Type())
+		return newError(nil, "not a function: %s", fn.Type())
 	}
 
 	extendedEnv := extendFunctionEnv(function, args)
@@ -163,7 +163,7 @@ func evalPrefixExpression(operator string, right object.Object) object.Object {
 	case "-":
 		return evalMinusPrefixOperatorExpression(right)
 	default:
-		return newError("unknown operator: %s%s", operator, right.Type())
+		return newError(nil, "unknown operator: %s%s", operator, right.Type())
 	}
 }
 
@@ -176,9 +176,9 @@ func evalInfixExpression(operator string, left, right object.Object) object.Obje
 	case operator == "!=":
 		return nativeBoolToBooleanObject(left != right)
 	case left.Type() != right.Type():
-		return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())
+		return newError(nil, "type mismatch: %s %s %s", left.Type(), operator, right.Type())
 	default:
-		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
+		return newError(nil, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
@@ -195,7 +195,7 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 		return &object.Integer{Value: leftVal * rightVal}
 	case "/":
 		if rightVal == 0 {
-			return newError("division by zero")
+			return newError(nil, "division by zero")
 		}
 		return &object.Integer{Value: leftVal / rightVal}
 	case "<":
@@ -207,7 +207,7 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 	case "!=":
 		return nativeBoolToBooleanObject(leftVal != rightVal)
 	default:
-		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
+		return newError(nil, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
@@ -226,7 +226,7 @@ func evalBangOperatorExpression(right object.Object) object.Object {
 
 func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
 	if right.Type() != object.INTEGER_OBJ {
-		return newError("unknown operator: -%s", right.Type())
+		return newError(nil, "unknown operator: -%s", right.Type())
 	}
 
 	value := right.(*object.Integer).Value
@@ -236,7 +236,7 @@ func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
 func evalIdentifier(node *parser.Identifier, env *object.Environment) object.Object {
 	val, ok := env.Get(node.Value)
 	if !ok {
-		return newError("identifier not found: %s", node.Value)
+		return newError(node, "identifier not found: %s", node.Value)
 	}
 	return val
 }
@@ -276,8 +276,38 @@ func nativeBoolToBooleanObject(input bool) *object.Boolean {
 	return FALSE
 }
 
-func newError(format string, a ...interface{}) *object.Error {
-	return &object.Error{Message: fmt.Sprintf(format, a...)}
+func newError(node parser.Node, format string, a ...interface{}) *object.Error {
+	msg := fmt.Sprintf(format, a...)
+	err := &object.Error{
+		Message: msg,
+		File:    "unknown", // Defaults, ideally we propagate file context too
+		Line:    0,
+		Column:  0,
+	}
+
+	if node != nil {
+		// Try to extract Token from known types or if we extended Node interface
+		// For now we check specifically for types we know have Tokens in AST
+		switch n := node.(type) {
+		case *parser.Identifier:
+			err.Line = n.Token.Line
+			err.Column = n.Token.Column
+		case *parser.IntegerLiteral:
+			err.Line = n.Token.Line
+			err.Column = n.Token.Column
+		case *parser.BooleanLiteral:
+			err.Line = n.Token.Line
+			err.Column = n.Token.Column
+		case *parser.PrefixExpression:
+			err.Line = n.Token.Line
+			err.Column = n.Token.Column
+		case *parser.InfixExpression:
+			err.Line = n.Token.Line
+			err.Column = n.Token.Column
+		}
+	}
+
+	return err
 }
 
 func isError(obj object.Object) bool {

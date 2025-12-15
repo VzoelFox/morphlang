@@ -57,11 +57,38 @@ func (rv *ReturnValue) Type() ObjectType { return RETURN_VALUE_OBJ }
 func (rv *ReturnValue) Inspect() string  { return rv.Value.Inspect() }
 
 type Error struct {
-	Message string
+	Message    string
+	Line       int
+	Column     int
+	File       string
+	StackTrace []string
+	Hint       string
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
-func (e *Error) Inspect() string  { return "ERROR: " + e.Message }
+func (e *Error) Inspect() string {
+	var out bytes.Buffer
+
+	// Basic Error Header
+	out.WriteString(fmt.Sprintf("Error di [%s:%d:%d]:\n", e.File, e.Line, e.Column))
+	out.WriteString(fmt.Sprintf("  %s\n", e.Message))
+
+	// Arrow Pointer (Context) logic would theoretically go here if we had source access
+	// For now, we stick to the formatted output required by AGENTS.md
+
+	if len(e.StackTrace) > 0 {
+		out.WriteString("\nStack trace:\n")
+		for _, trace := range e.StackTrace {
+			out.WriteString(fmt.Sprintf("  di %s\n", trace))
+		}
+	}
+
+	if e.Hint != "" {
+		out.WriteString(fmt.Sprintf("\nHint: %s", e.Hint))
+	}
+
+	return out.String()
+}
 
 type String struct {
 	Value string
