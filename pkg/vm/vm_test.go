@@ -104,6 +104,168 @@ func TestGlobalVariables(t *testing.T) {
 	runVmTests(t, tests)
 }
 
+func TestStringExpressions(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`"monkey"`, "monkey"},
+		{`"mon" + "key"`, "monkey"},
+		{`"mon" + "key" + "banana"`, "monkeybanana"},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestArrayLiterals(t *testing.T) {
+	// Cannot use input string because Parser doesn't support arrays.
+	// Construct bytecode manually.
+	tests := []struct {
+		instructions compiler.Instructions
+		constants    []object.Object
+		expected     []int64
+	}{
+		{
+			concatInstructions(
+				compiler.Make(compiler.OpLoadConst, 0), // 1
+				compiler.Make(compiler.OpLoadConst, 1), // 2
+				compiler.Make(compiler.OpArray, 2),
+				compiler.Make(compiler.OpPop),
+			),
+			[]object.Object{
+				&object.Integer{Value: 1},
+				&object.Integer{Value: 2},
+			},
+			[]int64{1, 2},
+		},
+		{
+			concatInstructions(
+				compiler.Make(compiler.OpLoadConst, 0), // 1
+				compiler.Make(compiler.OpLoadConst, 1), // 2
+				compiler.Make(compiler.OpAdd),          // 3
+				compiler.Make(compiler.OpLoadConst, 2), // 4
+				compiler.Make(compiler.OpLoadConst, 3), // 5
+				compiler.Make(compiler.OpMul),          // 20
+				compiler.Make(compiler.OpArray, 2),
+				compiler.Make(compiler.OpPop),
+			),
+			[]object.Object{
+				&object.Integer{Value: 1},
+				&object.Integer{Value: 2},
+				&object.Integer{Value: 4},
+				&object.Integer{Value: 5},
+			},
+			[]int64{3, 20},
+		},
+	}
+
+	for _, tt := range tests {
+		bytecode := &compiler.Bytecode{
+			Instructions: tt.instructions,
+			Constants:    tt.constants,
+		}
+		runVmTestWithBytecode(t, bytecode, tt.expected)
+	}
+}
+
+func TestHashLiterals(t *testing.T) {
+	// Construct bytecode manually for {1: 2, 3: 4}
+	tests := []struct {
+		instructions compiler.Instructions
+		constants    []object.Object
+		expected     map[object.HashKey]int64
+	}{
+		{
+			concatInstructions(
+				compiler.Make(compiler.OpLoadConst, 0), // 1
+				compiler.Make(compiler.OpLoadConst, 1), // 2
+				compiler.Make(compiler.OpLoadConst, 2), // 3
+				compiler.Make(compiler.OpLoadConst, 3), // 4
+				compiler.Make(compiler.OpHash, 4),      // 4 elements (2 pairs)
+				compiler.Make(compiler.OpPop),
+			),
+			[]object.Object{
+				&object.Integer{Value: 1},
+				&object.Integer{Value: 2},
+				&object.Integer{Value: 3},
+				&object.Integer{Value: 4},
+			},
+			map[object.HashKey]int64{
+				(&object.Integer{Value: 1}).HashKey(): 2,
+				(&object.Integer{Value: 3}).HashKey(): 4,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		bytecode := &compiler.Bytecode{
+			Instructions: tt.instructions,
+			Constants:    tt.constants,
+		}
+		runVmTestWithBytecode(t, bytecode, tt.expected)
+	}
+}
+
+func TestIndexExpressions(t *testing.T) {
+	// [1, 2, 3][1] -> 2
+	tests := []struct {
+		instructions compiler.Instructions
+		constants    []object.Object
+		expected     interface{}
+	}{
+		{
+			concatInstructions(
+				compiler.Make(compiler.OpLoadConst, 0), // 1
+				compiler.Make(compiler.OpLoadConst, 1), // 2
+				compiler.Make(compiler.OpLoadConst, 2), // 3
+				compiler.Make(compiler.OpArray, 3),
+				compiler.Make(compiler.OpLoadConst, 3), // Index 1
+				compiler.Make(compiler.OpIndex),
+				compiler.Make(compiler.OpPop),
+			),
+			[]object.Object{
+				&object.Integer{Value: 1},
+				&object.Integer{Value: 2},
+				&object.Integer{Value: 3},
+				&object.Integer{Value: 1}, // Index
+			},
+			2,
+		},
+		{
+			// {1: 2}[1] -> 2
+			concatInstructions(
+				compiler.Make(compiler.OpLoadConst, 0), // Key 1
+				compiler.Make(compiler.OpLoadConst, 1), // Value 2
+				compiler.Make(compiler.OpHash, 2),
+				compiler.Make(compiler.OpLoadConst, 0), // Key 1
+				compiler.Make(compiler.OpIndex),
+				compiler.Make(compiler.OpPop),
+			),
+			[]object.Object{
+				&object.Integer{Value: 1},
+				&object.Integer{Value: 2},
+			},
+			2,
+		},
+	}
+
+	for _, tt := range tests {
+		bytecode := &compiler.Bytecode{
+			Instructions: tt.instructions,
+			Constants:    tt.constants,
+		}
+		runVmTestWithBytecode(t, bytecode, tt.expected)
+	}
+}
+
+func concatInstructions(s ...[]byte) []byte {
+	var out []byte
+	for _, b := range s {
+		out = append(out, b...)
+	}
+	return out
+}
+
 func runVmTests(t *testing.T, tests interface{}) {
 	switch tests := tests.(type) {
 	case []struct {
@@ -127,6 +289,13 @@ func runVmTests(t *testing.T, tests interface{}) {
 		for _, tt := range tests {
 			runVmTest(t, tt.input, tt.expected)
 		}
+	case []struct {
+		input    string
+		expected string
+	}:
+		for _, tt := range tests {
+			runVmTest(t, tt.input, tt.expected)
+		}
 	default:
 		t.Fatalf("unsupported test type")
 	}
@@ -141,8 +310,13 @@ func runVmTest(t *testing.T, input string, expected interface{}) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	vm := New(comp.Bytecode())
-	err = vm.Run()
+	bytecode := comp.Bytecode()
+	runVmTestWithBytecode(t, bytecode, expected)
+}
+
+func runVmTestWithBytecode(t *testing.T, bytecode *compiler.Bytecode, expected interface{}) {
+	vm := New(bytecode)
+	err := vm.Run()
 	if err != nil {
 		t.Fatalf("vm error: %s", err)
 	}
@@ -159,6 +333,39 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 		testIntegerObject(t, obj, expected)
 	case bool:
 		testBooleanObject(t, obj, expected)
+	case string:
+		testStringObject(t, obj, expected)
+	case []int64:
+		result, ok := obj.(*object.Array)
+		if !ok {
+			t.Errorf("object is not Array. got=%T (%+v)", obj, obj)
+			return
+		}
+		if len(result.Elements) != len(expected) {
+			t.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(result.Elements))
+			return
+		}
+		for i, expectedVal := range expected {
+			testIntegerObject(t, result.Elements[i], expectedVal)
+		}
+	case map[object.HashKey]int64:
+		result, ok := obj.(*object.Hash)
+		if !ok {
+			t.Errorf("object is not Hash. got=%T (%+v)", obj, obj)
+			return
+		}
+		if len(result.Pairs) != len(expected) {
+			t.Errorf("wrong num of pairs. want=%d, got=%d", len(expected), len(result.Pairs))
+			return
+		}
+		for key, expectedVal := range expected {
+			pair, ok := result.Pairs[key]
+			if !ok {
+				t.Errorf("no pair for key %v", key)
+				continue
+			}
+			testIntegerObject(t, pair.Value, expectedVal)
+		}
 	case nil:
 		if obj == nil {
 			return
@@ -198,5 +405,21 @@ func testBooleanObject(t *testing.T, obj object.Object, expected bool) {
 
 	if result.Value != expected {
 		t.Errorf("object has wrong value. got=%t, want=%t", result.Value, expected)
+	}
+}
+
+func testStringObject(t *testing.T, obj object.Object, expected string) {
+	if obj == nil {
+		t.Errorf("object is nil, want String %q", expected)
+		return
+	}
+	result, ok := obj.(*object.String)
+	if !ok {
+		t.Errorf("object is not String. got=%T (%+v)", obj, obj)
+		return
+	}
+
+	if result.Value != expected {
+		t.Errorf("object has wrong value. got=%q, want=%q", result.Value, expected)
 	}
 }

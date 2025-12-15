@@ -183,6 +183,10 @@ func (c *Compiler) Compile(node parser.Node) error {
 	case *parser.BooleanLiteral:
 		boolean := &object.Boolean{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(boolean))
+
+	case *parser.StringLiteral:
+		str := &object.String{Value: node.Value}
+		c.emit(OpLoadConst, c.addConstant(str))
 	}
 
 	return nil
