@@ -77,14 +77,14 @@ func TestConditionals(t *testing.T) {
 		input    string
 		expected interface{}
 	}{
-		{"jika (benar) { 10 }", 10},
-		{"jika (benar) { 10 } lainnya { 20 }", 10},
-		{"jika (salah) { 10 } lainnya { 20 }", 20},
-		{"jika (1 < 2) { 10 }", 10},
-		{"jika (1 < 2) { 10 } lainnya { 20 }", 10},
-		{"jika (1 > 2) { 10 } lainnya { 20 }", 20},
-		{"jika (1 > 2) { 10 }", nil}, // Null
-		{"jika (salah) { 10 }", nil}, // Null
+		{"jika (benar) 10 akhir", 10},
+		{"jika (benar) 10 lainnya 20 akhir", 10},
+		{"jika (salah) 10 lainnya 20 akhir", 20},
+		{"jika (1 < 2) 10 akhir", 10},
+		{"jika (1 < 2) 10 lainnya 20 akhir", 10},
+		{"jika (1 > 2) 10 lainnya 20 akhir", 20},
+		{"jika (1 > 2) 10 akhir", nil}, // Null
+		{"jika (salah) 10 akhir", nil}, // Null
 	}
 
 	runVmTests(t, tests)
@@ -118,152 +118,63 @@ func TestStringExpressions(t *testing.T) {
 }
 
 func TestArrayLiterals(t *testing.T) {
-	// Cannot use input string because Parser doesn't support arrays.
-	// Construct bytecode manually.
 	tests := []struct {
-		instructions compiler.Instructions
-		constants    []object.Object
-		expected     []int64
+		input    string
+		expected []int64
 	}{
-		{
-			concatInstructions(
-				compiler.Make(compiler.OpLoadConst, 0), // 1
-				compiler.Make(compiler.OpLoadConst, 1), // 2
-				compiler.Make(compiler.OpArray, 2),
-				compiler.Make(compiler.OpPop),
-			),
-			[]object.Object{
-				&object.Integer{Value: 1},
-				&object.Integer{Value: 2},
-			},
-			[]int64{1, 2},
-		},
-		{
-			concatInstructions(
-				compiler.Make(compiler.OpLoadConst, 0), // 1
-				compiler.Make(compiler.OpLoadConst, 1), // 2
-				compiler.Make(compiler.OpAdd),          // 3
-				compiler.Make(compiler.OpLoadConst, 2), // 4
-				compiler.Make(compiler.OpLoadConst, 3), // 5
-				compiler.Make(compiler.OpMul),          // 20
-				compiler.Make(compiler.OpArray, 2),
-				compiler.Make(compiler.OpPop),
-			),
-			[]object.Object{
-				&object.Integer{Value: 1},
-				&object.Integer{Value: 2},
-				&object.Integer{Value: 4},
-				&object.Integer{Value: 5},
-			},
-			[]int64{3, 20},
-		},
+		{"[]", []int64{}},
+		{"[1, 2, 3]", []int64{1, 2, 3}},
+		{"[1 + 2, 3 * 4, 5 + 6]", []int64{3, 12, 11}},
 	}
 
-	for _, tt := range tests {
-		bytecode := &compiler.Bytecode{
-			Instructions: tt.instructions,
-			Constants:    tt.constants,
-		}
-		runVmTestWithBytecode(t, bytecode, tt.expected)
-	}
+	runVmTests(t, tests)
 }
 
 func TestHashLiterals(t *testing.T) {
-	// Construct bytecode manually for {1: 2, 3: 4}
 	tests := []struct {
-		instructions compiler.Instructions
-		constants    []object.Object
-		expected     map[object.HashKey]int64
+		input    string
+		expected map[object.HashKey]int64
 	}{
 		{
-			concatInstructions(
-				compiler.Make(compiler.OpLoadConst, 0), // 1
-				compiler.Make(compiler.OpLoadConst, 1), // 2
-				compiler.Make(compiler.OpLoadConst, 2), // 3
-				compiler.Make(compiler.OpLoadConst, 3), // 4
-				compiler.Make(compiler.OpHash, 4),      // 4 elements (2 pairs)
-				compiler.Make(compiler.OpPop),
-			),
-			[]object.Object{
-				&object.Integer{Value: 1},
-				&object.Integer{Value: 2},
-				&object.Integer{Value: 3},
-				&object.Integer{Value: 4},
-			},
+			"{}", map[object.HashKey]int64{},
+		},
+		{
+			"{1: 2, 2: 3}",
 			map[object.HashKey]int64{
 				(&object.Integer{Value: 1}).HashKey(): 2,
-				(&object.Integer{Value: 3}).HashKey(): 4,
+				(&object.Integer{Value: 2}).HashKey(): 3,
+			},
+		},
+		{
+			"{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
+			map[object.HashKey]int64{
+				(&object.Integer{Value: 2}).HashKey(): 4,
+				(&object.Integer{Value: 6}).HashKey(): 16,
 			},
 		},
 	}
 
-	for _, tt := range tests {
-		bytecode := &compiler.Bytecode{
-			Instructions: tt.instructions,
-			Constants:    tt.constants,
-		}
-		runVmTestWithBytecode(t, bytecode, tt.expected)
-	}
+	runVmTests(t, tests)
 }
 
 func TestIndexExpressions(t *testing.T) {
-	// [1, 2, 3][1] -> 2
 	tests := []struct {
-		instructions compiler.Instructions
-		constants    []object.Object
-		expected     interface{}
+		input    string
+		expected interface{}
 	}{
-		{
-			concatInstructions(
-				compiler.Make(compiler.OpLoadConst, 0), // 1
-				compiler.Make(compiler.OpLoadConst, 1), // 2
-				compiler.Make(compiler.OpLoadConst, 2), // 3
-				compiler.Make(compiler.OpArray, 3),
-				compiler.Make(compiler.OpLoadConst, 3), // Index 1
-				compiler.Make(compiler.OpIndex),
-				compiler.Make(compiler.OpPop),
-			),
-			[]object.Object{
-				&object.Integer{Value: 1},
-				&object.Integer{Value: 2},
-				&object.Integer{Value: 3},
-				&object.Integer{Value: 1}, // Index
-			},
-			2,
-		},
-		{
-			// {1: 2}[1] -> 2
-			concatInstructions(
-				compiler.Make(compiler.OpLoadConst, 0), // Key 1
-				compiler.Make(compiler.OpLoadConst, 1), // Value 2
-				compiler.Make(compiler.OpHash, 2),
-				compiler.Make(compiler.OpLoadConst, 0), // Key 1
-				compiler.Make(compiler.OpIndex),
-				compiler.Make(compiler.OpPop),
-			),
-			[]object.Object{
-				&object.Integer{Value: 1},
-				&object.Integer{Value: 2},
-			},
-			2,
-		},
+		{"[1, 2, 3][1]", 2},
+		{"[1, 2, 3][0 + 2]", 3},
+		{"[[1, 1, 1]][0][0]", 1},
+		{"[][0]", nil},
+		{"[1, 2, 3][99]", nil},
+		{"[1][-1]", nil},
+		{"{1: 1, 2: 2}[1]", 1},
+		{"{1: 1, 2: 2}[2]", 2},
+		{"{1: 1}[99]", nil},
+		{"{}[0]", nil},
 	}
 
-	for _, tt := range tests {
-		bytecode := &compiler.Bytecode{
-			Instructions: tt.instructions,
-			Constants:    tt.constants,
-		}
-		runVmTestWithBytecode(t, bytecode, tt.expected)
-	}
-}
-
-func concatInstructions(s ...[]byte) []byte {
-	var out []byte
-	for _, b := range s {
-		out = append(out, b...)
-	}
-	return out
+	runVmTests(t, tests)
 }
 
 func runVmTests(t *testing.T, tests interface{}) {
@@ -296,6 +207,20 @@ func runVmTests(t *testing.T, tests interface{}) {
 		for _, tt := range tests {
 			runVmTest(t, tt.input, tt.expected)
 		}
+	case []struct {
+		input    string
+		expected []int64
+	}:
+		for _, tt := range tests {
+			runVmTest(t, tt.input, tt.expected)
+		}
+	case []struct {
+		input    string
+		expected map[object.HashKey]int64
+	}:
+		for _, tt := range tests {
+			runVmTest(t, tt.input, tt.expected)
+		}
 	default:
 		t.Fatalf("unsupported test type")
 	}
@@ -310,13 +235,8 @@ func runVmTest(t *testing.T, input string, expected interface{}) {
 		t.Fatalf("compiler error: %s", err)
 	}
 
-	bytecode := comp.Bytecode()
-	runVmTestWithBytecode(t, bytecode, expected)
-}
-
-func runVmTestWithBytecode(t *testing.T, bytecode *compiler.Bytecode, expected interface{}) {
-	vm := New(bytecode)
-	err := vm.Run()
+	vm := New(comp.Bytecode())
+	err = vm.Run()
 	if err != nil {
 		t.Fatalf("vm error: %s", err)
 	}

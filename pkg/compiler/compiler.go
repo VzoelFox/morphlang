@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/VzoelFox/morphlang/pkg/object"
 	"github.com/VzoelFox/morphlang/pkg/parser"
@@ -187,6 +188,47 @@ func (c *Compiler) Compile(node parser.Node) error {
 	case *parser.StringLiteral:
 		str := &object.String{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(str))
+
+	case *parser.ArrayLiteral:
+		for _, el := range node.Elements {
+			err := c.Compile(el)
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(OpArray, len(node.Elements))
+
+	case *parser.HashLiteral:
+		keys := []parser.Expression{}
+		for k := range node.Pairs {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].String() < keys[j].String()
+		})
+
+		for _, key := range keys {
+			err := c.Compile(key)
+			if err != nil {
+				return err
+			}
+			err = c.Compile(node.Pairs[key])
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(OpHash, len(node.Pairs)*2)
+
+	case *parser.IndexExpression:
+		err := c.Compile(node.Left)
+		if err != nil {
+			return err
+		}
+		err = c.Compile(node.Index)
+		if err != nil {
+			return err
+		}
+		c.emit(OpIndex)
 	}
 
 	return nil
