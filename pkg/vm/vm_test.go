@@ -90,6 +90,20 @@ func TestConditionals(t *testing.T) {
 	runVmTests(t, tests)
 }
 
+func TestGlobalVariables(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{"x = 10; x", 10},
+		{"x = 10; y = 20; x + y", 30},
+		{"x = 10; y = x + 5; y", 15},
+		{"x = 10; x = 20; x", 20},
+	}
+
+	runVmTests(t, tests)
+}
+
 func runVmTests(t *testing.T, tests interface{}) {
 	switch tests := tests.(type) {
 	case []struct {

@@ -17,6 +17,7 @@ type Compiler struct {
 	constants           []object.Object
 	lastInstruction     EmittedInstruction
 	previousInstruction EmittedInstruction
+	symbolTable         *SymbolTable
 }
 
 func New() *Compiler {
@@ -25,6 +26,7 @@ func New() *Compiler {
 		constants:           []object.Object{},
 		lastInstruction:     EmittedInstruction{},
 		previousInstruction: EmittedInstruction{},
+		symbolTable:         NewSymbolTable(),
 	}
 }
 
@@ -55,6 +57,25 @@ func (c *Compiler) Compile(node parser.Node) error {
 				return err
 			}
 		}
+
+	case *parser.AssignmentStatement:
+		err := c.Compile(node.Value)
+		if err != nil {
+			return err
+		}
+
+		symbol, ok := c.symbolTable.Resolve(node.Name.Value)
+		if !ok {
+			symbol = c.symbolTable.Define(node.Name.Value)
+		}
+		c.emit(OpStoreGlobal, symbol.Index)
+
+	case *parser.Identifier:
+		symbol, ok := c.symbolTable.Resolve(node.Value)
+		if !ok {
+			return fmt.Errorf("undefined variable %s", node.Value)
+		}
+		c.emit(OpLoadGlobal, symbol.Index)
 
 	case *parser.IfExpression:
 		err := c.Compile(node.Condition)
