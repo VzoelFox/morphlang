@@ -30,15 +30,19 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 		return &object.ReturnValue{Value: val}
 	case *parser.AssignmentStatement:
 		val := Eval(node.Value, env)
-		if isError(val) {
-			return val
-		}
+		// Error as Value: we allow assigning Error objects to variables
 		env.Set(node.Name.Value, val)
-		return val
+
+		// We return NULL to indicate the statement executed successfully (even if the assigned value is an error).
+		// This prevents the main evaluation loop from aborting execution when a variable is assigned an error value,
+		// allowing the user to check the variable with `adalah_galat(x)`.
+		return NULL
 
 	// Expressions
 	case *parser.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
+	case *parser.StringLiteral:
+		return &object.String{Value: node.Value}
 	case *parser.BooleanLiteral:
 		return nativeBoolToBooleanObject(node.Value)
 	case *parser.PrefixExpression:
@@ -75,9 +79,8 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 			return function
 		}
 		args := evalExpressions(node.Arguments, env)
-		if len(args) == 1 && isError(args[0]) {
-			return args[0]
-		}
+		// We REMOVE the check that aborts if an arg is an error.
+		// This allows functions (like adalah_galat) to receive Error objects.
 		return applyFunction(function, args)
 	}
 	return nil
@@ -98,14 +101,42 @@ func evalExpressions(exps []parser.Expression, env *object.Environment) []object
 }
 
 func applyFunction(fn object.Object, args []object.Object) object.Object {
-	function, ok := fn.(*object.Function)
-	if !ok {
-		return newError(nil, "not a function: %s", fn.Type())
+	// Check for propagated error in arguments
+	if len(args) == 1 && isError(args[0]) {
+		// If the function is a built-in that specifically handles errors, let it pass.
+		// Otherwise, propagate the error up.
+		if builtin, ok := fn.(*object.Builtin); ok {
+			// List of built-ins that accept errors
+			// TODO: Maybe add a flag to Builtin struct?
+			// For now, hardcode check or rely on Builtin logic?
+			// But Builtins are stored in map, we don't know their name here easily unless we look it up.
+			// Actually, Builtin struct only has Fn.
+			// We can try to run it. But if it's `panjang(error)`, `panjang` implementation checks type.
+			// If `panjang` doesn't support error, it returns error.
+			// But what if it's a User Function?
+			return builtin.Fn(args...)
+		}
+
+		// For user functions, we don't support passing Error objects as arguments yet
+		// (unless we add specific syntax for it, but AGENTS.md implies we check return values).
+		// So we propagate the error.
+		return args[0]
 	}
 
-	extendedEnv := extendFunctionEnv(function, args)
-	evaluated := Eval(function.Body, extendedEnv)
-	return unwrapReturnValue(evaluated)
+	switch function := fn.(type) {
+	case *object.Function:
+		// Safety check for argument count
+		if len(args) != len(function.Parameters) {
+			return newError(nil, "argument mismatch: expected %d, got %d", len(function.Parameters), len(args))
+		}
+		extendedEnv := extendFunctionEnv(function, args)
+		evaluated := Eval(function.Body, extendedEnv)
+		return unwrapReturnValue(evaluated)
+	case *object.Builtin:
+		return function.Fn(args...)
+	default:
+		return newError(nil, "not a function: %s", fn.Type())
+	}
 }
 
 func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Environment {
@@ -235,10 +266,15 @@ func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
 
 func evalIdentifier(node *parser.Identifier, env *object.Environment) object.Object {
 	val, ok := env.Get(node.Value)
-	if !ok {
-		return newError(node, "identifier not found: %s", node.Value)
+	if ok {
+		return val
 	}
-	return val
+
+	if builtin, ok := builtins[node.Value]; ok {
+		return builtin
+	}
+
+	return newError(node, "identifier not found: %s", node.Value)
 }
 
 func evalIfExpression(ie *parser.IfExpression, env *object.Environment) object.Object {
