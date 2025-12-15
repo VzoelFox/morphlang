@@ -12,7 +12,8 @@ type Symbol struct {
 	Index int
 }
 
-type SymbolTable struct {
+type SymbolTable struct 
+{
 	Outer          *SymbolTable
 	store          map[string]Symbol
 	numDefinitions int
