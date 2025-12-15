@@ -139,6 +139,23 @@ func TestReturnStatements(t *testing.T) {
 	}
 }
 
+func TestAssignmentStatements(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"x = 5; x;", 5},
+		{"x = 5 * 5; x;", 25},
+		{"x = 5; y = x; y;", 5},
+		{"x = 5; y = x + 5; y;", 10},
+	}
+
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+		testIntegerObject(t, evaluated, tt.expected)
+	}
+}
+
 func TestErrorHandling(t *testing.T) {
 	tests := []struct {
 		input           string
@@ -178,6 +195,10 @@ func TestErrorHandling(t *testing.T) {
 			akhir
 			`,
 			"unknown operator: BOOLEAN + BOOLEAN",
+		},
+		{
+			"foobar",
+			"identifier not found: foobar",
 		},
 	}
 
