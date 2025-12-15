@@ -17,6 +17,7 @@ const (
 	PRODUCT     // *
 	PREFIX      // -X or !X
 	CALL        // myFunction(X)
+	INDEX       // array[index]
 )
 
 var precedences = map[lexer.TokenType]int{
@@ -31,6 +32,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.SLASH:    PRODUCT,
 	lexer.ASTERISK: PRODUCT,
 	lexer.LPAREN:   CALL,
+	lexer.LBRACKET: INDEX,
 }
 
 type (
@@ -96,6 +98,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.JIKA, p.parseIfExpression)
 	p.registerPrefix(lexer.SELAMA, p.parseWhileExpression)
 	p.registerPrefix(lexer.FUNGSI, p.parseFunctionLiteral)
+	p.registerPrefix(lexer.LBRACKET, p.parseArrayLiteral)
+	p.registerPrefix(lexer.LBRACE, p.parseHashLiteral)
 
 	p.infixParseFns = make(map[lexer.TokenType]infixParseFn)
 	p.registerInfix(lexer.PLUS, p.parseInfixExpression)
@@ -109,6 +113,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.LTE, p.parseInfixExpression)
 	p.registerInfix(lexer.GTE, p.parseInfixExpression)
 	p.registerInfix(lexer.LPAREN, p.parseCallExpression)
+	p.registerInfix(lexer.LBRACKET, p.parseIndexExpression)
 
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
@@ -332,6 +337,78 @@ func (p *Parser) parseStringLiteral() Expression {
 
 func (p *Parser) parseBoolean() Expression {
 	return &BooleanLiteral{Token: p.curToken, Value: p.curTokenIs(lexer.BENAR)}
+}
+
+func (p *Parser) parseArrayLiteral() Expression {
+	array := &ArrayLiteral{Token: p.curToken}
+	array.Elements = p.parseExpressionList(lexer.RBRACKET)
+	return array
+}
+
+func (p *Parser) parseExpressionList(end lexer.TokenType) []Expression {
+	list := []Expression{}
+
+	if p.peekTokenIs(end) {
+		p.nextToken()
+		return list
+	}
+
+	p.nextToken()
+	list = append(list, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(end) {
+		return nil
+	}
+
+	return list
+}
+
+func (p *Parser) parseHashLiteral() Expression {
+	hash := &HashLiteral{Token: p.curToken}
+	hash.Pairs = make(map[Expression]Expression)
+
+	for !p.peekTokenIs(lexer.RBRACE) {
+		p.nextToken()
+		key := p.parseExpression(LOWEST)
+
+		if !p.expectPeek(lexer.COLON) {
+			return nil
+		}
+
+		p.nextToken()
+		value := p.parseExpression(LOWEST)
+
+		hash.Pairs[key] = value
+
+		if !p.peekTokenIs(lexer.RBRACE) && !p.expectPeek(lexer.COMMA) {
+			return nil
+		}
+	}
+
+	if !p.expectPeek(lexer.RBRACE) {
+		return nil
+	}
+
+	return hash
+}
+
+func (p *Parser) parseIndexExpression(left Expression) Expression {
+	exp := &IndexExpression{Token: p.curToken, Left: left}
+
+	p.nextToken()
+	exp.Index = p.parseExpression(LOWEST)
+
+	if !p.expectPeek(lexer.RBRACKET) {
+		return nil
+	}
+
+	return exp
 }
 
 func (p *Parser) parsePrefixExpression() Expression {
