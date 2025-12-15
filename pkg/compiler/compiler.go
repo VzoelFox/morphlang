@@ -69,14 +69,24 @@ func (c *Compiler) Compile(node parser.Node) error {
 		if !ok {
 			symbol = c.symbolTable.Define(node.Name.Value)
 		}
-		c.emit(OpStoreGlobal, symbol.Index)
+
+		if symbol.Scope == GlobalScope {
+			c.emit(OpStoreGlobal, symbol.Index)
+		} else {
+			c.emit(OpStoreLocal, symbol.Index)
+		}
 
 	case *parser.Identifier:
 		symbol, ok := c.symbolTable.Resolve(node.Value)
 		if !ok {
 			return fmt.Errorf("undefined variable %s", node.Value)
 		}
-		c.emit(OpLoadGlobal, symbol.Index)
+
+		if symbol.Scope == GlobalScope {
+			c.emit(OpLoadGlobal, symbol.Index)
+		} else {
+			c.emit(OpLoadLocal, symbol.Index)
+		}
 
 	case *parser.IfExpression:
 		err := c.Compile(node.Condition)
@@ -277,6 +287,14 @@ func (c *Compiler) Bytecode() *Bytecode {
 		Instructions: c.instructions,
 		Constants:    c.constants,
 	}
+}
+
+func (c *Compiler) EnterScope() {
+	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
+}
+
+func (c *Compiler) LeaveScope() {
+	c.symbolTable = c.symbolTable.Outer
 }
 
 type Bytecode struct {
