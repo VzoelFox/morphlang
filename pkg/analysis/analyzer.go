@@ -10,11 +10,12 @@ import (
 )
 
 type Analyzer struct {
-	program  *parser.Program
-	filename string
-	input    string
-	context  *Context
-	currFunc string
+	program    *parser.Program
+	filename   string
+	input      string
+	context    *Context
+	currFunc   string
+	scopeStack []map[string]bool // Stack of defined variables to simulate scope lookups
 }
 
 func GenerateContext(program *parser.Program, filename string, input string, parserErrors []parser.ParserError) (*Context, error) {
@@ -57,11 +58,15 @@ func GenerateContext(program *parser.Program, filename string, input string, par
 	}
 
 	a := &Analyzer{
-		program:  program,
-		filename: filename,
-		input:    input,
-		context:  ctx,
+		program:    program,
+		filename:   filename,
+		input:      input,
+		context:    ctx,
+		scopeStack: []map[string]bool{},
 	}
+
+	// Push global scope
+	a.scopeStack = append(a.scopeStack, make(map[string]bool))
 
 	a.analyze()
 
@@ -90,6 +95,24 @@ func (a *Analyzer) analyze() {
 	}
 	// Calculate complexity summary
 	a.context.Complexity.LinesOfCode = a.context.Statistics.CodeLines
+}
+
+// isDefined checks if a variable is defined in the current or outer scopes
+func (a *Analyzer) isDefined(name string) bool {
+	// Iterate stack backwards (from current scope to global)
+	for i := len(a.scopeStack) - 1; i >= 0; i-- {
+		if _, ok := a.scopeStack[i][name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// defineInCurrentScope marks a variable as defined in the current top scope
+func (a *Analyzer) defineInCurrentScope(name string) {
+	if len(a.scopeStack) > 0 {
+		a.scopeStack[len(a.scopeStack)-1][name] = true
+	}
 }
 
 func (a *Analyzer) analyzeTopLevel(stmt parser.Statement) {
@@ -121,6 +144,7 @@ func (a *Analyzer) analyzeTopLevel(stmt parser.Statement) {
 			Line: s.Token.Line,
 			Type: inferredType,
 		}
+		a.defineInCurrentScope(name) // Mark global var
 		a.walkExpression(s.Value, func(node parser.Node) {})
 	}
 }
@@ -156,6 +180,14 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 	prevFunc := a.currFunc
 	a.currFunc = name
 
+	// Push new scope for function
+	a.scopeStack = append(a.scopeStack, make(map[string]bool))
+
+	// Define parameters in this scope
+	for _, p := range fn.Parameters {
+		a.defineInCurrentScope(p.Value)
+	}
+
 	canError := false
 	complexity := 1 // Base complexity
 
@@ -179,22 +211,32 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 				}
 			}
 		}
-		// Local vars
+		// Local vars logic (Closure Aware)
 		if assign, ok := node.(*parser.AssignmentStatement); ok {
 			varName := assign.Name.Value
-			// Avoid duplicates
-			found := false
-			for _, v := range sym.LocalVars {
-				if v == varName {
-					found = true
-					break
+
+			// Check if variable is defined in any scope up the chain
+			if a.isDefined(varName) {
+				// It's an UPDATE to an existing variable (closure or local update), NOT a new local decl
+				// Do nothing (don't register as new local var)
+			} else {
+				// It's a NEW declaration in this scope
+				a.defineInCurrentScope(varName)
+
+				// Register in symbol table as Local Var
+				found := false
+				for _, v := range sym.LocalVars {
+					if v == varName {
+						found = true
+						break
+					}
 				}
-			}
-			if !found {
-				sym.LocalVars = append(sym.LocalVars, varName)
-				a.context.LocalScopes[name][varName] = &Variable{
-					Line: assign.Token.Line,
-					Type: "inferred",
+				if !found {
+					sym.LocalVars = append(sym.LocalVars, varName)
+					a.context.LocalScopes[name][varName] = &Variable{
+						Line: assign.Token.Line,
+						Type: "inferred",
+					}
 				}
 			}
 		}
@@ -206,6 +248,9 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 			complexity++
 		}
 	})
+
+	// Pop scope
+	a.scopeStack = a.scopeStack[:len(a.scopeStack)-1]
 
 	sym.CanError = canError
 	if canError {
