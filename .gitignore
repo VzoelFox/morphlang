@@ -4,6 +4,7 @@ bin/
 *.dll
 *.so
 *.dylib
+morph
 
 # Test output
 *.out
