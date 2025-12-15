@@ -39,14 +39,14 @@ func TestEnvironmentEnclosed(t *testing.T) {
 	}
 }
 
-func TestEnvironmentShadowing(t *testing.T) {
+func TestEnvironmentClosureUpdate(t *testing.T) {
 	outer := NewEnvironment()
 	val1 := &Integer{Value: 1}
 	outer.Set("x", val1)
 
 	inner := NewEnclosedEnvironment(outer)
 	val2 := &Integer{Value: 2}
-	inner.Set("x", val2) // Shadows outer x
+	inner.Set("x", val2) // Updates outer x (Closure semantics)
 
 	// Inner should see val2
 	got, ok := inner.Get("x")
@@ -57,13 +57,13 @@ func TestEnvironmentShadowing(t *testing.T) {
 		t.Errorf("inner.Get('x') should be 2, got %s", got.Inspect())
 	}
 
-	// Outer should still see val1
+	// Outer should ALSO see val2 (Updated)
 	gotOuter, ok := outer.Get("x")
 	if !ok {
 		t.Fatalf("outer.Get('x') failed")
 	}
-	if gotOuter.(*Integer).Value != 1 {
-		t.Errorf("outer.Get('x') should be 1, got %s", gotOuter.Inspect())
+	if gotOuter.(*Integer).Value != 2 {
+		t.Errorf("outer.Get('x') should be 2 (updated), got %s", gotOuter.Inspect())
 	}
 }
 
