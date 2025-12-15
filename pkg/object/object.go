@@ -1,7 +1,11 @@
 package object
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
+
+	"github.com/VzoelFox/morphlang/pkg/parser"
 )
 
 type ObjectType string
@@ -14,6 +18,7 @@ const (
 	ERROR_OBJ        = "ERROR"
 	FUNCTION_OBJ     = "FUNCTION"
 	STRING_OBJ       = "STRING"
+	BUILTIN_OBJ      = "BUILTIN"
 )
 
 type Object interface {
@@ -53,11 +58,47 @@ func (rv *ReturnValue) Type() ObjectType { return RETURN_VALUE_OBJ }
 func (rv *ReturnValue) Inspect() string  { return rv.Value.Inspect() }
 
 type Error struct {
-	Message string
+	Message    string
+	Line       int
+	Column     int
+	File       string
+	StackTrace []string
+	Hint       string
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
-func (e *Error) Inspect() string  { return "ERROR: " + e.Message }
+func (e *Error) Inspect() string {
+	var out bytes.Buffer
+
+	// Basic Error Header
+	out.WriteString(fmt.Sprintf("Error di [%s:%d:%d]:\n", e.File, e.Line, e.Column))
+	out.WriteString(fmt.Sprintf("  %s\n", e.Message))
+
+	// Arrow Pointer (Context) logic would theoretically go here if we had source access
+	// For now, we stick to the formatted output required by AGENTS.md
+
+	if len(e.StackTrace) > 0 {
+		out.WriteString("\nStack trace:\n")
+		for _, trace := range e.StackTrace {
+			out.WriteString(fmt.Sprintf("  di %s\n", trace))
+		}
+	}
+
+	if e.Hint != "" {
+		out.WriteString(fmt.Sprintf("\nHint: %s", e.Hint))
+	}
+
+	return out.String()
+}
+
+type BuiltinFunction func(args ...Object) Object
+
+type Builtin struct {
+	Fn BuiltinFunction
+}
+
+func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (b *Builtin) Inspect() string  { return "builtin function" }
 
 type String struct {
 	Value string
@@ -65,3 +106,28 @@ type String struct {
 
 func (s *String) Type() ObjectType { return STRING_OBJ }
 func (s *String) Inspect() string  { return s.Value }
+
+type Function struct {
+	Parameters []*parser.Identifier
+	Body       *parser.BlockStatement
+	Env        *Environment
+}
+
+func (f *Function) Type() ObjectType { return FUNCTION_OBJ }
+func (f *Function) Inspect() string {
+	var out bytes.Buffer
+
+	params := []string{}
+	for _, p := range f.Parameters {
+		params = append(params, p.String())
+	}
+
+	out.WriteString("fungsi")
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") ")
+	out.WriteString(f.Body.String())
+	out.WriteString(" akhir")
+
+	return out.String()
+}
