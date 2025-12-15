@@ -50,7 +50,7 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 		if isError(right) {
 			return right
 		}
-		return evalPrefixExpression(node.Operator, right)
+		return evalPrefixExpression(node, node.Operator, right)
 	case *parser.InfixExpression:
 		left := Eval(node.Left, env)
 		if isError(left) {
@@ -60,7 +60,7 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 		if isError(right) {
 			return right
 		}
-		return evalInfixExpression(node.Operator, left, right)
+		return evalInfixExpression(node, node.Operator, left, right)
 	case *parser.IfExpression:
 		return evalIfExpression(node, env)
 	case *parser.WhileExpression:
@@ -189,33 +189,35 @@ func evalBlockStatement(block *parser.BlockStatement, env *object.Environment) o
 	return result
 }
 
-func evalPrefixExpression(operator string, right object.Object) object.Object {
+func evalPrefixExpression(node parser.Node, operator string, right object.Object) object.Object {
 	switch operator {
 	case "!":
 		return evalBangOperatorExpression(right)
 	case "-":
-		return evalMinusPrefixOperatorExpression(right)
+		return evalMinusPrefixOperatorExpression(right, node)
 	default:
-		return newError(nil, "unknown operator: %s%s", operator, right.Type())
+		return newError(node, "unknown operator: %s%s", operator, right.Type())
 	}
 }
 
-func evalInfixExpression(operator string, left, right object.Object) object.Object {
+func evalInfixExpression(node parser.Node, operator string, left, right object.Object) object.Object {
 	switch {
 	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
-		return evalIntegerInfixExpression(operator, left, right)
+		return evalIntegerInfixExpression(node, operator, left, right)
+	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
+		return evalStringInfixExpression(node, operator, left, right)
 	case operator == "==":
 		return nativeBoolToBooleanObject(left == right)
 	case operator == "!=":
 		return nativeBoolToBooleanObject(left != right)
 	case left.Type() != right.Type():
-		return newError(nil, "type mismatch: %s %s %s", left.Type(), operator, right.Type())
+		return newError(node, "type mismatch: %s %s %s", left.Type(), operator, right.Type())
 	default:
-		return newError(nil, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
+		return newError(node, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
-func evalIntegerInfixExpression(operator string, left, right object.Object) object.Object {
+func evalIntegerInfixExpression(node parser.Node, operator string, left, right object.Object) object.Object {
 	leftVal := left.(*object.Integer).Value
 	rightVal := right.(*object.Integer).Value
 
@@ -228,7 +230,7 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 		return &object.Integer{Value: leftVal * rightVal}
 	case "/":
 		if rightVal == 0 {
-			return newError(nil, "division by zero")
+			return newError(node, "division by zero")
 		}
 		return &object.Integer{Value: leftVal / rightVal}
 	case "<":
@@ -240,7 +242,23 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 	case "!=":
 		return nativeBoolToBooleanObject(leftVal != rightVal)
 	default:
-		return newError(nil, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
+		return newError(node, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
+	}
+}
+
+func evalStringInfixExpression(node parser.Node, operator string, left, right object.Object) object.Object {
+	leftVal := left.(*object.String).Value
+	rightVal := right.(*object.String).Value
+
+	switch operator {
+	case "+":
+		return &object.String{Value: leftVal + rightVal}
+	case "==":
+		return nativeBoolToBooleanObject(leftVal == rightVal)
+	case "!=":
+		return nativeBoolToBooleanObject(leftVal != rightVal)
+	default:
+		return newError(node, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
@@ -257,9 +275,9 @@ func evalBangOperatorExpression(right object.Object) object.Object {
 	}
 }
 
-func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
+func evalMinusPrefixOperatorExpression(right object.Object, node parser.Node) object.Object {
 	if right.Type() != object.INTEGER_OBJ {
-		return newError(nil, "unknown operator: -%s", right.Type())
+		return newError(node, "unknown operator: -%s", right.Type())
 	}
 
 	value := right.(*object.Integer).Value
