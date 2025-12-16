@@ -6,21 +6,33 @@ import (
 )
 
 // Alloc allocates memory. It handles "Draft Otomatis" (Swapping) if RAM is full.
+// Thread-safe.
 func (c *Cabinet) Alloc(size int) (Ptr, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.alloc(size)
+}
+
+// Internal recursive alloc (assumes lock held)
+func (c *Cabinet) alloc(size int) (Ptr, error) {
 	if size <= 0 {
 		return NilPtr, fmt.Errorf("invalid allocation size: %d", size)
 	}
 
 	alignedSize := (size + 7) &^ 7
 
+	if alignedSize > TRAY_SIZE {
+		return NilPtr, fmt.Errorf("allocation size %d exceeds tray limit %d", alignedSize, TRAY_SIZE)
+	}
+
 	activeDrawer := &c.Drawers[c.ActiveDrawerIndex]
 
-	// Ensure active drawer is in RAM
-	if activeDrawer.IsSwapped {
-		if err := c.BringToRAM(c.ActiveDrawerIndex); err != nil {
+	// Ensure active drawer is in RAM (Resident)
+	if activeDrawer.PhysicalSlot == -1 {
+		if err := c.bringToRAM(c.ActiveDrawerIndex); err != nil {
 			return NilPtr, err
 		}
-		// Re-fetch pointer after move
+		// Re-fetch pointer
 		activeDrawer = &c.Drawers[c.ActiveDrawerIndex]
 	}
 
@@ -32,44 +44,40 @@ func (c *Cabinet) Alloc(size int) (Ptr, error) {
 	}
 
 	if activeTray.Remaining() < alignedSize {
-		// Drawer Full. Switch to next drawer?
-		// For this experiment, let's say we switch to a NEW drawer if current is full.
-		// Or we just fail for current drawer.
-		// User requirement: "masuk cache kalo terkena draft otomatis".
-		// This usually means evicting OLD data to make room for NEW data.
-
-		// Let's create a new Drawer for this allocation.
-		newDrawer := CreateDrawer()
+		// Drawer Full. Create new drawer.
+		newDrawer := CreateDrawer() // Internal? No, exported in structure.go. Assumes Lock?
+		// We need to verify CreateDrawer. Assuming it doesn't lock.
 		if newDrawer == nil {
 			return NilPtr, fmt.Errorf("virtual memory limit reached")
 		}
 
 		c.ActiveDrawerIndex = newDrawer.ID
 
-		// If newDrawer is Swapped (no RAM slots), we must evict someone.
-		if newDrawer.IsSwapped {
-			if err := c.BringToRAM(newDrawer.ID); err != nil {
+		// Ensure new drawer is resident
+		if newDrawer.PhysicalSlot == -1 {
+			if err := c.bringToRAM(newDrawer.ID); err != nil {
 				return NilPtr, err
 			}
 			newDrawer = &c.Drawers[c.ActiveDrawerIndex]
 		}
 
-		// Recurse to alloc in new drawer
-		return c.Alloc(size)
+		// Recurse
+		return c.alloc(size)
 	}
 
 	ptr := activeTray.Current
+	// Bump pointer
 	activeTray.Current += Ptr(alignedSize)
 
 	return ptr, nil
 }
 
-// BringToRAM ensures the drawer is in physical RAM.
-// If RAM is full, it evicts a victim drawer to swap.
-func (c *Cabinet) BringToRAM(drawerID int) error {
+// bringToRAM ensures the drawer is in physical RAM.
+// Assumes c.mu is Locked.
+func (c *Cabinet) bringToRAM(drawerID int) error {
 	target := &c.Drawers[drawerID]
-	if !target.IsSwapped {
-		return nil
+	if target.PhysicalSlot != -1 {
+		return nil // Already resident
 	}
 
 	// Find free slot
@@ -81,44 +89,37 @@ func (c *Cabinet) BringToRAM(drawerID int) error {
 		}
 	}
 
-	// If no free slot, EVICT victim (Draft Otomatis)
+	// If no free slot, EVICT victim
 	if freeSlot == -1 {
-		// Simple policy: Evict (ActiveIndex + 1) % MAX, or just slot 0?
-		// Let's evict slot 0 (FIFO replacement for simplicity)
 		victimID := c.RAMSlots[0]
 		if victimID == drawerID {
-			return fmt.Errorf("deadlock: trying to evict self") // Should not happen
+			return fmt.Errorf("deadlock: trying to evict self")
 		}
 
-		err := c.EvictToSwap(victimID)
+		err := c.evictToSwap(victimID)
 		if err != nil {
 			return err
 		}
-		freeSlot = 0 // Slot 0 is now free
+		freeSlot = 0
 	}
+
+	// Calculate Physical Address for this slot
+	base := uintptr(RAM.BasePointer())
+	offset := uintptr(freeSlot) * uintptr(DRAWER_SIZE)
+	physAddr := unsafe.Pointer(base + offset)
+	destSlice := unsafe.Slice((*byte)(physAddr), DRAWER_SIZE)
 
 	// Load data if it was previously saved
 	if target.SwapOffset > 0 {
-		// Restore from disk
-		// We need temporary buffer? No, read directly to RAM.
-		// Setup pointers first
-		SetupTrayPointers(target, freeSlot)
-
-		// Calculate RAM start address
-		startPtr := target.PrimaryTray.Start // Base of drawer
-
-		// Convert Ptr to []byte slice for Restore
-		// Length = DRAWER_SIZE
-		rawStart := startPtr.ToUnsafe()
-		destSlice := unsafe.Slice((*byte)(rawStart), DRAWER_SIZE)
-
 		err := Swap.Restore(target.SwapOffset, destSlice)
 		if err != nil {
 			return err
 		}
 	} else {
-		// Fresh drawer, just setup pointers
-		SetupTrayPointers(target, freeSlot)
+		// Zero out memory for fresh drawer
+		for i := range destSlice {
+			destSlice[i] = 0
+		}
 	}
 
 	c.RAMSlots[freeSlot] = drawerID
@@ -128,82 +129,69 @@ func (c *Cabinet) BringToRAM(drawerID int) error {
 	return nil
 }
 
-// EvictToSwap moves a drawer from RAM to Disk
-func (c *Cabinet) EvictToSwap(drawerID int) error {
+// evictToSwap moves a drawer from RAM to Disk.
+// Assumes c.mu is Locked.
+func (c *Cabinet) evictToSwap(drawerID int) error {
 	victim := &c.Drawers[drawerID]
-	if victim.IsSwapped {
-		return nil
+	slot := victim.PhysicalSlot
+
+	if slot == -1 {
+		return nil // Already swapped
 	}
 
-	// 1. Serialize RAM content
-	startPtr := victim.PrimaryTray.Start // Base
-	rawStart := startPtr.ToUnsafe()
-	srcSlice := unsafe.Slice((*byte)(rawStart), DRAWER_SIZE)
+	// 1. Get RAM content
+	base := uintptr(RAM.BasePointer())
+	offset := uintptr(slot) * uintptr(DRAWER_SIZE)
+	physAddr := unsafe.Pointer(base + offset)
+	srcSlice := unsafe.Slice((*byte)(physAddr), DRAWER_SIZE)
 
 	// 2. Write to .z file
-	offset, err := Swap.Spill(srcSlice)
+	fileOffset, err := Swap.Spill(srcSlice)
 	if err != nil {
 		return err
 	}
 
 	// 3. Update State
 	victim.IsSwapped = true
-	victim.SwapOffset = offset
-
-	// 4. Free RAM slot
-	slot := victim.PhysicalSlot
-	c.RAMSlots[slot] = -1
+	victim.SwapOffset = fileOffset
 	victim.PhysicalSlot = -1
 
-	// Pointers are now invalid, but we keep them relative?
-	// No, Ptr is absolute offset in Arena.
-	// When swapped out, Ptr values in objects inside this drawer become invalid
-	// unless we implement relocation/swizzling.
-	// For this Phase X, we assume Ptr is valid ONLY when drawer is loaded back to SAME slot?
-	// Or we reload to ANY slot and fix pointers?
-	// Simpler: We reload to ANY slot, but Ptr inside objects are "Relative to Drawer"?
-	// Our `Ptr` type is absolute. This is a problem for Paging.
-	// BUT user asked for "Draft Otomatis". Ideally we reload to SAME slot if we want to avoid swizzling.
-	// Or we simply accept that pointers break for now (Experimental).
-	// Let's try to reload to ANY slot. Pointers will point to wrong data if we don't fix them.
-	// But `Alloc` returns absolute Ptr.
-	// If `drawer` moves from Slot 0 to Slot 1, `Alloc` returned 0x100, now data is at 0x10000.
-	// Old pointer 0x100 points to Slot 0 (now occupied by someone else).
-	// This means **Pointers are unstable** in this Paging model.
-	// Real OS uses Virtual Memory hardware (MMU) to map Virtual Address -> Physical Address.
-	// We are implementing MMU in software.
-	// `Ptr` should be `VirtualPtr` (DrawerID + Offset).
-	// Then dereferencing `Ptr` translates to `RAM[Slot(DrawerID) + Offset]`.
-
-	// Refactor `Ptr`? Too big scope.
-	// For now, let's just implement the SWAP MECHANISM.
-	// The data moves. Pointers break. That's acceptable for "Initial Experiment".
-	// Or, we force eviction of *oldest* drawer and never reload it until we access it?
-	// If we access it via `Ptr`, we don't know which drawer it belongs to easily.
+	// 4. Free RAM slot
+	c.RAMSlots[slot] = -1
 
 	return nil
 }
 
 // Write writes data to the pointer address.
+// Thread-safe.
 func Write(dst Ptr, data []byte) error {
-	if dst == NilPtr {
-		return fmt.Errorf("segmentation fault: nil pointer")
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	rawPtr, err := Lemari.resolve(dst)
+	if err != nil {
+		return err
 	}
 
-	// Note: In paging model, dst might point to swapped out memory!
-	// We need to check if address is Resident.
-	// Map Ptr -> Drawer?
-	// Ptr is raw offset.
-	// We can calculate Slot from Ptr.
-	// Slot = Ptr / DRAWER_SIZE.
-	// Check if Slot is occupied.
-
-	// Check physical bounds
-	// ... (Skipping complex checks for MVP)
-
-	rawPtr := dst.ToUnsafe()
 	size := len(data)
 	targetSlice := unsafe.Slice((*byte)(rawPtr), size)
 	copy(targetSlice, data)
 	return nil
+}
+
+// Read reads data from the pointer address.
+// Thread-safe.
+func Read(src Ptr, size int) ([]byte, error) {
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	rawPtr, err := Lemari.resolve(src)
+	if err != nil {
+		return nil, err
+	}
+
+	srcSlice := unsafe.Slice((*byte)(rawPtr), size)
+	ret := make([]byte, size)
+	copy(ret, srcSlice)
+	return ret, nil
 }

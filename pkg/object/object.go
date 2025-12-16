@@ -24,6 +24,7 @@ const (
 	HASH_OBJ              = "HASH"
 	COMPILED_FUNCTION_OBJ = "COMPILED_FUNCTION"
 	CLOSURE_OBJ           = "CLOSURE"
+	CHANNEL_OBJ           = "CHANNEL"
 )
 
 type Object interface {
@@ -110,6 +111,13 @@ func (e *Error) Inspect() string {
 
 	return out.String()
 }
+
+type Channel struct {
+	Value chan Object
+}
+
+func (c *Channel) Type() ObjectType { return CHANNEL_OBJ }
+func (c *Channel) Inspect() string  { return fmt.Sprintf("saluran[%p]", c.Value) }
 
 type BuiltinFunction func(args ...Object) Object
 

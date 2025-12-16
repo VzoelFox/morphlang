@@ -307,6 +307,15 @@ func (vm *VM) executeBuiltinCall(builtin *object.Builtin, numArgs int) error {
 
 	result := builtin.Fn(args...)
 
+	// INTERCEPT: luncurkan
+	if errObj, ok := result.(*object.Error); ok && errObj.Message == "luncurkan() requires VM context" {
+		if err := vm.spawn(args); err != nil {
+			result = &object.Error{Message: err.Error()}
+		} else {
+			result = Null
+		}
+	}
+
 	vm.sp = vm.sp - numArgs - 1 // Pop args + function
 
 	if result != nil {
@@ -314,6 +323,43 @@ func (vm *VM) executeBuiltinCall(builtin *object.Builtin, numArgs int) error {
 	} else {
 		return vm.push(Null)
 	}
+}
+
+func (vm *VM) spawn(args []object.Object) error {
+	if len(args) != 1 {
+		return fmt.Errorf("luncurkan takes exactly 1 argument")
+	}
+	cl, ok := args[0].(*object.Closure)
+	if !ok {
+		return fmt.Errorf("luncurkan argument must be a function")
+	}
+	if cl.Fn.NumParameters != 0 {
+		return fmt.Errorf("luncurkan function must accept 0 arguments")
+	}
+
+	// Create new VM sharing state (Scaffolding: Shared Globals)
+	// Warning: Global variables are shared but not thread-safe.
+	// Use Channels for safe communication.
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = NewFrame(cl, 0)
+
+	newVM := &VM{
+		constants:   vm.constants,
+		globals:     vm.globals,
+		stack:       [StackSize]object.Object{},
+		sp:          cl.Fn.NumLocals, // Reserve space for locals on the stack
+		frames:      frames,
+		framesIndex: 1,
+	}
+
+	go func() {
+		err := newVM.Run()
+		if err != nil {
+			fmt.Printf("Background task error: %v\n", err)
+		}
+	}()
+
+	return nil
 }
 
 func (vm *VM) push(o object.Object) error {

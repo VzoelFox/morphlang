@@ -8,10 +8,12 @@ import (
 	"strings"
 )
 
-var Builtins = []struct {
+type BuiltinDef struct {
 	Name    string
 	Builtin *Builtin
-}{
+}
+
+var Builtins = []BuiltinDef{
 	{
 		"panjang",
 		&Builtin{Fn: func(args ...Object) Object {
@@ -316,6 +318,15 @@ var Builtins = []struct {
 			return &Integer{Value: int64(res)}
 		}},
 	},
+}
+
+// RegisterBuiltin registers a new builtin function dynamically.
+// Useful for adding builtins from other files (e.g. system info).
+func RegisterBuiltin(name string, fn BuiltinFunction) {
+	Builtins = append(Builtins, BuiltinDef{
+		Name:    name,
+		Builtin: &Builtin{Fn: fn},
+	})
 }
 
 func GetBuiltinByName(name string) int {
