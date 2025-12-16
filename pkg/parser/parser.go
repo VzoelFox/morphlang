@@ -11,6 +11,8 @@ import (
 const (
 	_ int = iota
 	LOWEST
+	OR          // atau
+	AND         // dan
 	EQUALS      // ==
 	LESSGREATER // > or <
 	SUM         // +
@@ -21,6 +23,8 @@ const (
 )
 
 var precedences = map[lexer.TokenType]int{
+	lexer.ATAU:     OR,
+	lexer.DAN:      AND,
 	lexer.EQ:       EQUALS,
 	lexer.NOT_EQ:   EQUALS,
 	lexer.LT:       LESSGREATER,
@@ -112,6 +116,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.GT, p.parseInfixExpression)
 	p.registerInfix(lexer.LTE, p.parseInfixExpression)
 	p.registerInfix(lexer.GTE, p.parseInfixExpression)
+	p.registerInfix(lexer.DAN, p.parseInfixExpression)
+	p.registerInfix(lexer.ATAU, p.parseInfixExpression)
 	p.registerInfix(lexer.LPAREN, p.parseCallExpression)
 	p.registerInfix(lexer.LBRACKET, p.parseIndexExpression)
 
@@ -471,7 +477,8 @@ func (p *Parser) parseInfixExpression(left Expression) Expression {
 func isBinaryOp(t lexer.TokenType) bool {
 	switch t {
 	case lexer.PLUS, lexer.MINUS, lexer.SLASH, lexer.ASTERISK,
-		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE:
+		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE,
+		lexer.DAN, lexer.ATAU:
 		return true
 	}
 	return false
