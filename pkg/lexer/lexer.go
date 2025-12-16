@@ -95,7 +95,9 @@ func (l *Lexer) peekChar() byte {
 
 func (l *Lexer) NextToken() Token {
 	if l.currentState() == STATE_STRING {
-		return l.readStringToken()
+		// Continuation of string (e.g. after interpolation) usually has no leading space
+		// relative to the code stream, as it is inside quotes.
+		return l.readStringToken(false)
 	}
 	return l.readCodeToken()
 }
@@ -185,13 +187,34 @@ func (l *Lexer) readCodeToken() Token {
 	case '"':
 		// Optimization for empty string
 		if l.peekChar() == '"' {
-			tok = Token{Type: STRING, Literal: "", Line: tokLine, Column: tokCol}
+			tok = Token{Type: STRING, Literal: "", Line: tokLine, Column: tokCol, HasLeadingSpace: hasLeadingSpace}
 			l.readChar() // consume opening "
-			// consume closing " happens at end of function
+			// consume closing " happens at end of function if logic flowed there, but here we return early?
+			// Wait, previous logic was: l.readChar(); return ...
+			// But readStringToken expects to read content.
+			// Let's keep logic simple: push state, delegate to readStringToken.
+			// Optimizations might be tricky with HasLeadingSpace.
+			// Let's remove optimization for clarity/safety or fix it.
+			// If empty string: ""
+			l.readChar() // eat opening "
+			// check closing
+			if l.ch == '"' {
+				tok = Token{Type: STRING, Literal: "", Line: tokLine, Column: tokCol, HasLeadingSpace: hasLeadingSpace}
+				l.readChar() // eat closing "
+				return tok
+			}
+			// Not empty immediately (or logic above was just optimization).
+			// Let's stick to standard path.
+			// Rewind? No.
+			// Just use readStringToken logic.
+			l.pushState(STATE_STRING)
+			// l.readChar() was done (consumed opening ").
+			// But readStringToken expects to start reading content.
+			return l.readStringToken(hasLeadingSpace)
 		} else {
 			l.pushState(STATE_STRING)
 			l.readChar() // consume opening "
-			return l.readStringToken()
+			return l.readStringToken(hasLeadingSpace)
 		}
 	case 0:
 		tok.Literal = ""
@@ -224,7 +247,7 @@ func (l *Lexer) readCodeToken() Token {
 	return tok
 }
 
-func (l *Lexer) readStringToken() Token {
+func (l *Lexer) readStringToken(hasLeadingSpace bool) Token {
 	tokLine := l.line
 	tokCol := l.column
 
@@ -236,14 +259,21 @@ func (l *Lexer) readStringToken() Token {
 
 	if l.ch == '#' && l.peekChar() == '{' {
 		l.pushState(STATE_CODE)
-		tok := Token{Type: INTERP_START, Literal: "#{", Line: tokLine, Column: tokCol}
+		// Interpolation start. Does it have leading space? No, inside string.
+		tok := Token{Type: INTERP_START, Literal: "#{", Line: tokLine, Column: tokCol, HasLeadingSpace: false}
 		l.readChar() // consume #
 		l.readChar() // consume {
 		return tok
 	}
 
 	content := l.readStringContent()
-	return Token{Type: STRING, Literal: content, Line: tokLine, Column: tokCol}
+	return Token{
+		Type:            STRING,
+		Literal:         content,
+		Line:            tokLine,
+		Column:          tokCol,
+		HasLeadingSpace: hasLeadingSpace,
+	}
 }
 
 func newToken(tokenType TokenType, ch byte) Token {

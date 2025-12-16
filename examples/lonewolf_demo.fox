@@ -8,7 +8,6 @@ cetak("=== DEMO LONEWOLF NATIVE (SCAFFOLDING) ===")
 
 # 1. Siapkan Saluran Komunikasi
 sinyal = saluran_baru(0)
-STR_SELESAI = "SELESAI"
 
 # 2. Definisikan Serigala (Monitor di Background)
 fungsi serigala()
@@ -18,12 +17,14 @@ fungsi serigala()
   selama iterasi < 3
     # Simulasi monitoring
     cetak("[Serigala] Detak jantung...", iterasi)
+
+    # Kirim data counter
     kirim(sinyal, iterasi)
     iterasi = iterasi + 1
   akhir
 
   cetak("[Serigala] Selesai bertugas.")
-  kirim(sinyal, STR_SELESAI)
+  kirim(sinyal, "SELESAI")
 akhir
 
 # 3. Luncurkan Serigala
@@ -33,11 +34,11 @@ luncurkan(serigala)
 cetak("[Main] Menunggu laporan...")
 
 status = "JALAN"
-selama status != STR_SELESAI
+selama status != "SELESAI"
   laporan = terima(sinyal)
   cetak("[Main] Menerima sinyal:", laporan)
 
-  jika laporan == STR_SELESAI
+  jika laporan == "SELESAI"
     status = "SELESAI"
   akhir
 akhir
