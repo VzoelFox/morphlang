@@ -1,0 +1,19 @@
+fungsi kerja_berat()
+    cetak("Background thread mulai...")
+    # Simulasi kerja
+    x = 10 + 20
+    cetak("Background thread selesai.")
+    kembalikan x
+akhir
+
+cetak("Main thread mulai.")
+t = luncurkan(kerja_berat)
+cetak("Main thread menunggu sebentar (manual delay karena belum ada join)...")
+
+# Kita tidak punya sleep, jadi loop sibuk sebentar
+i = 0
+selama i < 10000
+    i = i + 1
+akhir
+
+cetak("Main thread selesai.")

@@ -323,6 +323,33 @@ var Builtins = []BuiltinDef{
 // RegisterBuiltin registers a new builtin function dynamically.
 // Useful for adding builtins from other files (e.g. system info).
 func RegisterBuiltin(name string, fn BuiltinFunction) {
+	// Registry Check: Check for name collision
+	for i, def := range Builtins {
+		if def.Name == name {
+			// Collision detected! Use composition to support overloading.
+			originalFn := def.Builtin.Fn
+			newFn := fn
+
+			composedFn := func(args ...Object) Object {
+				// Try the NEW function first
+				result := newFn(args...)
+
+				// If it fails with a type/arg mismatch, try the OLD function
+				if err, ok := result.(*Error); ok {
+					if strings.Contains(err.Message, "argument mismatch") ||
+						strings.Contains(err.Message, "argument to") { // "argument to `x` must be Y"
+						return originalFn(args...)
+					}
+				}
+				return result
+			}
+
+			// Update the existing builtin
+			Builtins[i].Builtin.Fn = composedFn
+			return
+		}
+	}
+
 	Builtins = append(Builtins, BuiltinDef{
 		Name:    name,
 		Builtin: &Builtin{Fn: fn},

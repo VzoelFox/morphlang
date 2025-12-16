@@ -215,6 +215,12 @@ func (vm *VM) Run() error {
 
 		case compiler.OpReturnValue:
 			returnValue := vm.pop()
+
+			if vm.framesIndex == 1 {
+				vm.popFrame()
+				return nil
+			}
+
 			frame := vm.popFrame()
 			vm.sp = frame.basePointer - 1 // Pop locals AND function
 			if vm.sp < 0 {
@@ -227,6 +233,11 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpReturn:
+			if vm.framesIndex == 1 {
+				vm.popFrame()
+				return nil
+			}
+
 			frame := vm.popFrame()
 			vm.sp = frame.basePointer - 1
 			if vm.sp < 0 {
@@ -309,10 +320,11 @@ func (vm *VM) executeBuiltinCall(builtin *object.Builtin, numArgs int) error {
 
 	// INTERCEPT: luncurkan
 	if errObj, ok := result.(*object.Error); ok && errObj.Message == "luncurkan() requires VM context" {
-		if err := vm.spawn(args); err != nil {
+		threadObj, err := vm.spawn(args)
+		if err != nil {
 			result = &object.Error{Message: err.Error()}
 		} else {
-			result = Null
+			result = threadObj
 		}
 	}
 
@@ -325,16 +337,16 @@ func (vm *VM) executeBuiltinCall(builtin *object.Builtin, numArgs int) error {
 	}
 }
 
-func (vm *VM) spawn(args []object.Object) error {
+func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 	if len(args) != 1 {
-		return fmt.Errorf("luncurkan takes exactly 1 argument")
+		return nil, fmt.Errorf("luncurkan takes exactly 1 argument")
 	}
 	cl, ok := args[0].(*object.Closure)
 	if !ok {
-		return fmt.Errorf("luncurkan argument must be a function")
+		return nil, fmt.Errorf("luncurkan argument must be a function")
 	}
 	if cl.Fn.NumParameters != 0 {
-		return fmt.Errorf("luncurkan function must accept 0 arguments")
+		return nil, fmt.Errorf("luncurkan function must accept 0 arguments")
 	}
 
 	// Create new VM sharing state (Scaffolding: Shared Globals)
@@ -352,14 +364,25 @@ func (vm *VM) spawn(args []object.Object) error {
 		framesIndex: 1,
 	}
 
+	resultCh := make(chan object.Object, 1)
+
 	go func() {
 		err := newVM.Run()
 		if err != nil {
-			fmt.Printf("Background task error: %v\n", err)
+			// If run fails, send error
+			resultCh <- &object.Error{Message: fmt.Sprintf("Background task error: %v", err)}
+		} else {
+			// If run succeeds, send last popped element (return value) or Null
+			if newVM.LastPoppedStackElem != nil {
+				resultCh <- newVM.LastPoppedStackElem
+			} else {
+				resultCh <- Null
+			}
 		}
+		close(resultCh)
 	}()
 
-	return nil
+	return &object.Thread{Result: resultCh}, nil
 }
 
 func (vm *VM) push(o object.Object) error {
