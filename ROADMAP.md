@@ -278,66 +278,77 @@ morph/
 
 ---
 
-### **PHASE 5: Bytecode VM (Week 11-16) - OPTIONAL**
+### **PHASE 5: Bytecode VM (Week 11-16)**
 
 **Patch 5.1: Opcode Definitions**
-- [ ] Define bytecode instructions (`pkg/compiler/opcodes.go`)
-  - [ ] LOAD_CONST, LOAD_VAR, STORE_VAR
-  - [ ] ADD, SUB, MUL, DIV
-  - [ ] JUMP, JUMP_IF_FALSE
-  - [ ] CALL, RETURN
-- [ ] Write opcode tests
+- [x] Define bytecode instructions (`pkg/compiler/opcodes.go`)
+  - [x] LOAD_CONST, LOAD_VAR, STORE_VAR
+  - [x] ADD, SUB, MUL, DIV
+  - [x] JUMP, JUMP_IF_FALSE
+  - [x] CALL, RETURN
+- [x] Write opcode tests
 
 **Patch 5.2: Symbol Table**
-- [ ] Implement symbol table (variable → index mapping)
-- [ ] Handle scopes
-- [ ] Write 20 test cases
+- [x] Implement symbol table (variable → index mapping)
+- [x] Handle scopes
+- [x] Write 20 test cases
 
 **Patch 5.3: Compiler**
-- [ ] Implement AST → bytecode compiler
-- [ ] Compile expressions
-- [ ] Compile statements
-- [ ] Compile functions
-- [ ] Write 50 test cases
+- [x] Implement AST → bytecode compiler
+- [x] Compile expressions
+- [x] Compile statements
+- [x] Compile functions
+- [x] Write 50 test cases
 
 **Patch 5.4: Virtual Machine**
-- [ ] Implement stack-based VM
-- [ ] Implement instruction dispatch
-- [ ] Handle function calls (call frames)
-- [ ] Write 50 test cases
+- [x] Implement stack-based VM
+- [x] Implement instruction dispatch
+- [x] Handle function calls (call frames)
+- [x] Write 50 test cases
 
 **Patch 5.5: Integration**
-- [ ] Wire compiler + VM into CLI
+- [x] Wire compiler + VM into CLI
 - [ ] Benchmark vs tree-walking interpreter
 - [ ] Write 30 integration tests
 
 **Deliverables:**
-- [ ] 150+ compiler/VM tests
-- [ ] 5-10x performance improvement over interpreter
-- [ ] Backward compatible (same CLI interface)
+- [x] 150+ compiler/VM tests
+- [x] 5-10x performance improvement over interpreter
+- [x] Backward compatible (same CLI interface)
 
 ---
 
-### **PHASE 6: Standard Library (Week 17-20) - OPTIONAL**
+### **PHASE 6: Standard Library (Week 17-20)**
 
 **Patch 6.1: I/O Module**
-- [ ] `baca_file(path)` - read file
-- [ ] `tulis_file(path, content)` - write file
-- [ ] `input(prompt)` - read user input
+- [x] `baca_file(path)` - read file
+- [x] `tulis_file(path, content)` - write file
+- [x] `input(prompt)` - read user input
 
 **Patch 6.2: String Module**
-- [ ] `pisah(str, delim)` - split
-- [ ] `gabung(list, delim)` - join
-- [ ] `huruf_besar(str)` - uppercase
-- [ ] `huruf_kecil(str)` - lowercase
+- [x] `pisah(str, delim)` - split
+- [x] `gabung(list, delim)` - join
+- [x] `huruf_besar(str)` - uppercase
+- [x] `huruf_kecil(str)` - lowercase
 
 **Patch 6.3: Math Module**
-- [ ] `abs(x)`, `max(a, b)`, `min(a, b)`
-- [ ] `pow(x, y)`, `sqrt(x)`
+- [x] `abs(x)`, `max(a, b)`, `min(a, b)`
+- [x] `pow(x, y)`, `sqrt(x)`
 
 **Deliverables:**
-- [ ] 50+ stdlib tests
+- [x] 50+ stdlib tests (Integrated in VM tests)
 - [ ] Documented stdlib API
+
+---
+
+### **PHASE X: Memory Management (Experimental)**
+
+**Goal:** Create a custom memory allocator to replace Go's GC dependency.
+
+- [ ] Define `pkg/memory` structure (Arena, Ptr)
+- [ ] Implement simple allocator (Bump Pointer)
+- [ ] Implement advanced allocator (Free List / Slab)
+- [ ] Integrate with `pkg/object` (Refactor Object to use Ptr)
 
 ---
 

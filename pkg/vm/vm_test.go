@@ -9,6 +9,11 @@ import (
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
 
+type vmTestCase struct {
+	input    string
+	expected interface{}
+}
+
 func parse(input string) parser.Node {
 	l := lexer.New(input)
 	p := parser.New(l)
@@ -262,13 +267,24 @@ func runVmTests(t *testing.T, tests interface{}) {
 		}
 	case []struct {
 		input    string
+		expected []string
+	}:
+		for _, tt := range tests {
+			runVmTest(t, tt.input, tt.expected)
+		}
+	case []struct {
+		input    string
 		expected map[object.HashKey]int64
 	}:
 		for _, tt := range tests {
 			runVmTest(t, tt.input, tt.expected)
 		}
+	case []vmTestCase:
+		for _, tt := range tests {
+			runVmTest(t, tt.input, tt.expected)
+		}
 	default:
-		t.Fatalf("unsupported test type")
+		t.Fatalf("unsupported test type %T", tests)
 	}
 }
 
@@ -314,6 +330,19 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 		for i, expectedVal := range expected {
 			testIntegerObject(t, result.Elements[i], expectedVal)
 		}
+	case []string:
+		result, ok := obj.(*object.Array)
+		if !ok {
+			t.Errorf("object is not Array. got=%T (%+v)", obj, obj)
+			return
+		}
+		if len(result.Elements) != len(expected) {
+			t.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(result.Elements))
+			return
+		}
+		for i, expectedVal := range expected {
+			testStringObject(t, result.Elements[i], expectedVal)
+		}
 	case map[object.HashKey]int64:
 		result, ok := obj.(*object.Hash)
 		if !ok {
@@ -338,6 +367,15 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 		}
 		if obj.Type() != object.NULL_OBJ {
 			t.Errorf("object is not Null. got=%T (%+v)", obj, obj)
+		}
+	case *object.Error:
+		result, ok := obj.(*object.Error)
+		if !ok {
+			t.Errorf("object is not Error. got=%T (%+v)", obj, obj)
+			return
+		}
+		if result.Message != expected.Message {
+			t.Errorf("wrong error message. expected=%q, got=%q", expected.Message, result.Message)
 		}
 	}
 }
