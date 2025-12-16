@@ -348,6 +348,15 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 		if obj.Type() != object.NULL_OBJ {
 			t.Errorf("object is not Null. got=%T (%+v)", obj, obj)
 		}
+	case *object.Error:
+		result, ok := obj.(*object.Error)
+		if !ok {
+			t.Errorf("object is not Error. got=%T (%+v)", obj, obj)
+			return
+		}
+		if result.Message != expected.Message {
+			t.Errorf("wrong error message. expected=%q, got=%q", expected.Message, result.Message)
+		}
 	}
 }
 

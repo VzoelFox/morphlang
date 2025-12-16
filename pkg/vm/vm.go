@@ -96,7 +96,7 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan:
+		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan, compiler.OpGreaterEqual:
 			err := vm.executeComparison(op)
 			if err != nil {
 				return err
@@ -356,7 +356,7 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		return vm.executeBinaryStringOperation(op, left, right)
 	}
 
-	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
+	return vm.push(&object.Error{Message: fmt.Sprintf("unsupported types for binary operation: %s %s", leftType, rightType)})
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right object.Object) error {
@@ -373,9 +373,12 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 	case compiler.OpMul:
 		result = leftVal * rightVal
 	case compiler.OpDiv:
+		if rightVal == 0 {
+			return vm.push(&object.Error{Message: "division by zero"})
+		}
 		result = leftVal / rightVal
 	default:
-		return fmt.Errorf("unknown integer operator: %d", op)
+		return vm.push(&object.Error{Message: fmt.Sprintf("unknown integer operator: %d", op)})
 	}
 
 	return vm.push(&object.Integer{Value: result})
@@ -383,7 +386,7 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 
 func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right object.Object) error {
 	if op != compiler.OpAdd {
-		return fmt.Errorf("unknown string operator: %d", op)
+		return vm.push(&object.Error{Message: fmt.Sprintf("unknown string operator: %d", op)})
 	}
 
 	leftVal := left.(*object.String).Value
@@ -410,7 +413,7 @@ func (vm *VM) executeComparison(op compiler.Opcode) error {
 	case compiler.OpNotEqual:
 		return vm.push(nativeBoolToBooleanObject(left != right && !(left.Type() == object.BOOLEAN_OBJ && right.Type() == object.BOOLEAN_OBJ && left.(*object.Boolean).Value == right.(*object.Boolean).Value)))
 	default:
-		return fmt.Errorf("unknown operator: %d (%s %s)", op, left.Type(), right.Type())
+		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported comparison: %s %d %s", left.Type(), op, right.Type())})
 	}
 }
 
@@ -425,6 +428,8 @@ func (vm *VM) executeIntegerComparison(op compiler.Opcode, left, right object.Ob
 		return vm.push(nativeBoolToBooleanObject(leftVal != rightVal))
 	case compiler.OpGreaterThan:
 		return vm.push(nativeBoolToBooleanObject(leftVal > rightVal))
+	case compiler.OpGreaterEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal >= rightVal))
 	default:
 		return fmt.Errorf("unknown integer operator: %d", op)
 	}
@@ -457,7 +462,7 @@ func (vm *VM) executeMinusOperator() error {
 	operand := vm.pop()
 
 	if operand.Type() != object.INTEGER_OBJ {
-		return fmt.Errorf("unsupported type for negation: %s", operand.Type())
+		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported type for negation: %s", operand.Type())})
 	}
 
 	value := operand.(*object.Integer).Value

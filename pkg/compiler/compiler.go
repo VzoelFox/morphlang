@@ -239,6 +239,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpDiv)
 		case ">":
 			c.emit(OpGreaterThan)
+		case ">=":
+			c.emit(OpGreaterEqual)
 		case "==":
 			c.emit(OpEqual)
 		case "!=":
