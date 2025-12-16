@@ -32,7 +32,8 @@ type VM struct {
 
 func New(bytecode *compiler.Bytecode) *VM {
 	mainFn := &object.CompiledFunction{Instructions: bytecode.Instructions}
-	mainFrame := NewFrame(mainFn, 0)
+	mainClosure := &object.Closure{Fn: mainFn}
+	mainFrame := NewFrame(mainClosure, 0)
 
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
@@ -236,24 +237,61 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
+
+		case compiler.OpClosure:
+			constIndex := compiler.ReadUint16(ins[ip+1:])
+			numFree := int(ins[ip+3])
+			vm.currentFrame().ip += 3
+
+			err := vm.pushClosure(int(constIndex), numFree)
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpGetFree:
+			freeIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+
+			currentClosure := vm.currentFrame().cl
+			err := vm.push(currentClosure.FreeVariables[freeIndex])
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
+func (vm *VM) pushClosure(constIndex int, numFree int) error {
+	constant := vm.constants[constIndex]
+	function, ok := constant.(*object.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("not a function: %+v", constant)
+	}
+
+	free := make([]object.Object, numFree)
+	for i := 0; i < numFree; i++ {
+		free[i] = vm.stack[vm.sp-numFree+i]
+	}
+	vm.sp = vm.sp - numFree
+
+	closure := &object.Closure{Fn: function, FreeVariables: free}
+	return vm.push(closure)
+}
+
 func (vm *VM) executeCall(numArgs int) error {
 	callee := vm.stack[vm.sp-1-numArgs]
 	switch callee := callee.(type) {
-	case *object.CompiledFunction:
-		if numArgs != callee.NumParameters {
+	case *object.Closure:
+		if numArgs != callee.Fn.NumParameters {
 			return fmt.Errorf("wrong number of arguments: want=%d, got=%d",
-				callee.NumParameters, numArgs)
+				callee.Fn.NumParameters, numArgs)
 		}
 
 		frame := NewFrame(callee, vm.sp-numArgs)
 		vm.pushFrame(frame)
-		vm.sp = frame.basePointer + callee.NumLocals
+		vm.sp = frame.basePointer + callee.Fn.NumLocals
 		return nil
 
 	case *object.Builtin:
@@ -299,6 +337,13 @@ func (vm *VM) pop() object.Object {
 func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 	right := vm.pop()
 	left := vm.pop()
+
+	if left == nil {
+		return fmt.Errorf("executeBinaryOperation: left operand is nil")
+	}
+	if right == nil {
+		return fmt.Errorf("executeBinaryOperation: right operand is nil")
+	}
 
 	leftType := left.Type()
 	rightType := right.Type()
