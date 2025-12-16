@@ -124,6 +124,10 @@ func (c *Cabinet) bringToRAM(drawerID int) error {
 
 	c.RAMSlots[freeSlot] = drawerID
 	target.PhysicalSlot = freeSlot
+	// target.IsSwapped was used as "Is currently swapped out".
+	// The struct comment said "IsSwapped bool". Let's use PhysicalSlot != -1 as the truth.
+	// But `IsSwapped` might mean "Has backup on disk".
+	// Let's interpret `IsSwapped` as "Currently NOT in RAM".
 	target.IsSwapped = false
 
 	return nil
