@@ -40,6 +40,48 @@ var Builtins = []struct {
 			return &String{Value: string(args[0].Type())}
 		}},
 	},
+	{
+		"galat",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			switch arg := args[0].(type) {
+			case *String:
+				return &Error{Message: arg.Value}
+			default:
+				return &Error{Message: fmt.Sprintf("argument to `galat` must be STRING, got %s", args[0].Type())}
+			}
+		}},
+	},
+	{
+		"adalah_galat",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			switch args[0].(type) {
+			case *Error:
+				return &Boolean{Value: true}
+			default:
+				return &Boolean{Value: false}
+			}
+		}},
+	},
+	{
+		"pesan_galat",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			switch arg := args[0].(type) {
+			case *Error:
+				return &String{Value: arg.Message}
+			default:
+				return &Error{Message: fmt.Sprintf("argument to `pesan_galat` must be ERROR, got %s", args[0].Type())}
+			}
+		}},
+	},
 }
 
 func GetBuiltinByName(name string) int {

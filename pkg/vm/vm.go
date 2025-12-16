@@ -32,7 +32,8 @@ type VM struct {
 
 func New(bytecode *compiler.Bytecode) *VM {
 	mainFn := &object.CompiledFunction{Instructions: bytecode.Instructions}
-	mainFrame := NewFrame(mainFn, 0)
+	mainClosure := &object.Closure{Fn: mainFn}
+	mainFrame := NewFrame(mainClosure, 0)
 
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
@@ -95,7 +96,7 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan:
+		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan, compiler.OpGreaterEqual:
 			err := vm.executeComparison(op)
 			if err != nil {
 				return err
@@ -236,24 +237,61 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
+
+		case compiler.OpClosure:
+			constIndex := compiler.ReadUint16(ins[ip+1:])
+			numFree := int(ins[ip+3])
+			vm.currentFrame().ip += 3
+
+			err := vm.pushClosure(int(constIndex), numFree)
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpGetFree:
+			freeIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+
+			currentClosure := vm.currentFrame().cl
+			err := vm.push(currentClosure.FreeVariables[freeIndex])
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
+func (vm *VM) pushClosure(constIndex int, numFree int) error {
+	constant := vm.constants[constIndex]
+	function, ok := constant.(*object.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("not a function: %+v", constant)
+	}
+
+	free := make([]object.Object, numFree)
+	for i := 0; i < numFree; i++ {
+		free[i] = vm.stack[vm.sp-numFree+i]
+	}
+	vm.sp = vm.sp - numFree
+
+	closure := &object.Closure{Fn: function, FreeVariables: free}
+	return vm.push(closure)
+}
+
 func (vm *VM) executeCall(numArgs int) error {
 	callee := vm.stack[vm.sp-1-numArgs]
 	switch callee := callee.(type) {
-	case *object.CompiledFunction:
-		if numArgs != callee.NumParameters {
+	case *object.Closure:
+		if numArgs != callee.Fn.NumParameters {
 			return fmt.Errorf("wrong number of arguments: want=%d, got=%d",
-				callee.NumParameters, numArgs)
+				callee.Fn.NumParameters, numArgs)
 		}
 
 		frame := NewFrame(callee, vm.sp-numArgs)
 		vm.pushFrame(frame)
-		vm.sp = frame.basePointer + callee.NumLocals
+		vm.sp = frame.basePointer + callee.Fn.NumLocals
 		return nil
 
 	case *object.Builtin:
@@ -300,6 +338,13 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 	right := vm.pop()
 	left := vm.pop()
 
+	if left == nil {
+		return fmt.Errorf("executeBinaryOperation: left operand is nil")
+	}
+	if right == nil {
+		return fmt.Errorf("executeBinaryOperation: right operand is nil")
+	}
+
 	leftType := left.Type()
 	rightType := right.Type()
 
@@ -311,7 +356,7 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		return vm.executeBinaryStringOperation(op, left, right)
 	}
 
-	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
+	return vm.push(&object.Error{Message: fmt.Sprintf("unsupported types for binary operation: %s %s", leftType, rightType)})
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right object.Object) error {
@@ -328,9 +373,12 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 	case compiler.OpMul:
 		result = leftVal * rightVal
 	case compiler.OpDiv:
+		if rightVal == 0 {
+			return vm.push(&object.Error{Message: "division by zero"})
+		}
 		result = leftVal / rightVal
 	default:
-		return fmt.Errorf("unknown integer operator: %d", op)
+		return vm.push(&object.Error{Message: fmt.Sprintf("unknown integer operator: %d", op)})
 	}
 
 	return vm.push(&object.Integer{Value: result})
@@ -338,7 +386,7 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 
 func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right object.Object) error {
 	if op != compiler.OpAdd {
-		return fmt.Errorf("unknown string operator: %d", op)
+		return vm.push(&object.Error{Message: fmt.Sprintf("unknown string operator: %d", op)})
 	}
 
 	leftVal := left.(*object.String).Value
@@ -365,7 +413,7 @@ func (vm *VM) executeComparison(op compiler.Opcode) error {
 	case compiler.OpNotEqual:
 		return vm.push(nativeBoolToBooleanObject(left != right && !(left.Type() == object.BOOLEAN_OBJ && right.Type() == object.BOOLEAN_OBJ && left.(*object.Boolean).Value == right.(*object.Boolean).Value)))
 	default:
-		return fmt.Errorf("unknown operator: %d (%s %s)", op, left.Type(), right.Type())
+		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported comparison: %s %d %s", left.Type(), op, right.Type())})
 	}
 }
 
@@ -380,6 +428,8 @@ func (vm *VM) executeIntegerComparison(op compiler.Opcode, left, right object.Ob
 		return vm.push(nativeBoolToBooleanObject(leftVal != rightVal))
 	case compiler.OpGreaterThan:
 		return vm.push(nativeBoolToBooleanObject(leftVal > rightVal))
+	case compiler.OpGreaterEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal >= rightVal))
 	default:
 		return fmt.Errorf("unknown integer operator: %d", op)
 	}
@@ -412,7 +462,7 @@ func (vm *VM) executeMinusOperator() error {
 	operand := vm.pop()
 
 	if operand.Type() != object.INTEGER_OBJ {
-		return fmt.Errorf("unsupported type for negation: %s", operand.Type())
+		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported type for negation: %s", operand.Type())})
 	}
 
 	value := operand.(*object.Integer).Value

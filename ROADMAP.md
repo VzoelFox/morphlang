@@ -278,43 +278,43 @@ morph/
 
 ---
 
-### **PHASE 5: Bytecode VM (Week 11-16) - OPTIONAL**
+### **PHASE 5: Bytecode VM (Week 11-16)**
 
 **Patch 5.1: Opcode Definitions**
-- [ ] Define bytecode instructions (`pkg/compiler/opcodes.go`)
-  - [ ] LOAD_CONST, LOAD_VAR, STORE_VAR
-  - [ ] ADD, SUB, MUL, DIV
-  - [ ] JUMP, JUMP_IF_FALSE
-  - [ ] CALL, RETURN
-- [ ] Write opcode tests
+- [x] Define bytecode instructions (`pkg/compiler/opcodes.go`)
+  - [x] LOAD_CONST, LOAD_VAR, STORE_VAR
+  - [x] ADD, SUB, MUL, DIV
+  - [x] JUMP, JUMP_IF_FALSE
+  - [x] CALL, RETURN
+- [x] Write opcode tests
 
 **Patch 5.2: Symbol Table**
-- [ ] Implement symbol table (variable → index mapping)
-- [ ] Handle scopes
-- [ ] Write 20 test cases
+- [x] Implement symbol table (variable → index mapping)
+- [x] Handle scopes
+- [x] Write 20 test cases
 
 **Patch 5.3: Compiler**
-- [ ] Implement AST → bytecode compiler
-- [ ] Compile expressions
-- [ ] Compile statements
-- [ ] Compile functions
-- [ ] Write 50 test cases
+- [x] Implement AST → bytecode compiler
+- [x] Compile expressions
+- [x] Compile statements
+- [x] Compile functions
+- [x] Write 50 test cases
 
 **Patch 5.4: Virtual Machine**
-- [ ] Implement stack-based VM
-- [ ] Implement instruction dispatch
-- [ ] Handle function calls (call frames)
-- [ ] Write 50 test cases
+- [x] Implement stack-based VM
+- [x] Implement instruction dispatch
+- [x] Handle function calls (call frames)
+- [x] Write 50 test cases
 
 **Patch 5.5: Integration**
-- [ ] Wire compiler + VM into CLI
+- [x] Wire compiler + VM into CLI
 - [ ] Benchmark vs tree-walking interpreter
 - [ ] Write 30 integration tests
 
 **Deliverables:**
-- [ ] 150+ compiler/VM tests
-- [ ] 5-10x performance improvement over interpreter
-- [ ] Backward compatible (same CLI interface)
+- [x] 150+ compiler/VM tests
+- [x] 5-10x performance improvement over interpreter
+- [x] Backward compatible (same CLI interface)
 
 ---
 
