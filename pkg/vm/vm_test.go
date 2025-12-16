@@ -9,6 +9,11 @@ import (
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
 
+type vmTestCase struct {
+	input    string
+	expected interface{}
+}
+
 func parse(input string) parser.Node {
 	l := lexer.New(input)
 	p := parser.New(l)
@@ -267,8 +272,12 @@ func runVmTests(t *testing.T, tests interface{}) {
 		for _, tt := range tests {
 			runVmTest(t, tt.input, tt.expected)
 		}
+	case []vmTestCase:
+		for _, tt := range tests {
+			runVmTest(t, tt.input, tt.expected)
+		}
 	default:
-		t.Fatalf("unsupported test type")
+		t.Fatalf("unsupported test type %T", tests)
 	}
 }
 
@@ -338,6 +347,15 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 		}
 		if obj.Type() != object.NULL_OBJ {
 			t.Errorf("object is not Null. got=%T (%+v)", obj, obj)
+		}
+	case *object.Error:
+		result, ok := obj.(*object.Error)
+		if !ok {
+			t.Errorf("object is not Error. got=%T (%+v)", obj, obj)
+			return
+		}
+		if result.Message != expected.Message {
+			t.Errorf("wrong error message. expected=%q, got=%q", expected.Message, result.Message)
 		}
 	}
 }
