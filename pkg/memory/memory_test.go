@@ -18,8 +18,10 @@ func TestCabinetInitialization(t *testing.T) {
 		t.Error("Primary tray should be active initially")
 	}
 
-	if drawer.PrimaryTray.Remaining() != TRAY_SIZE {
-		t.Errorf("Expected tray size %d, got %d", TRAY_SIZE, drawer.PrimaryTray.Remaining())
+	// Drawer 0 reserves 8 bytes
+	expectedSize := TRAY_SIZE - 8
+	if drawer.PrimaryTray.Remaining() != expectedSize {
+		t.Errorf("Expected tray size %d, got %d", expectedSize, drawer.PrimaryTray.Remaining())
 	}
 }
 
@@ -43,9 +45,18 @@ func TestAllocationAndWrite(t *testing.T) {
 		t.Fatalf("Write failed: %v", err)
 	}
 
-	// Verify data
-	rawPtr := ptr.ToUnsafe()
-	readData := unsafe.Slice((*byte)(rawPtr), size)
+	// Verify data manually
+	Lemari.mu.Lock()
+	rawPtr, err := Lemari.resolve(ptr)
+	if err != nil {
+		Lemari.mu.Unlock()
+		t.Fatal(err)
+	}
+	// Copy data out immediately to be safe
+	srcSlice := unsafe.Slice((*byte)(rawPtr), size)
+	readData := make([]byte, size)
+	copy(readData, srcSlice)
+	Lemari.mu.Unlock()
 
 	if !bytes.Equal(readData, data) {
 		t.Errorf("Memory corruption! Expected %s, got %s", data, readData)
@@ -60,7 +71,7 @@ func TestManualCopy(t *testing.T) {
 	ptrA, _ := Lemari.Alloc(len(dataA))
 	Write(ptrA, dataA)
 
-	// 2. Allocate space for "Glass B" (in same tray for now)
+	// 2. Allocate space for "Glass B"
 	ptrB, _ := Lemari.Alloc(len(dataA))
 
 	// 3. Manual Copy (Move A to B)
@@ -70,8 +81,17 @@ func TestManualCopy(t *testing.T) {
 	}
 
 	// 4. Verify B has A's content
-	rawB := ptrB.ToUnsafe()
-	readB := unsafe.Slice((*byte)(rawB), len(dataA))
+	Lemari.mu.Lock()
+	rawB, err := Lemari.resolve(ptrB)
+	if err != nil {
+		Lemari.mu.Unlock()
+		t.Fatal(err)
+	}
+	srcSlice := unsafe.Slice((*byte)(rawB), len(dataA))
+	readB := make([]byte, len(dataA))
+	copy(readB, srcSlice)
+	Lemari.mu.Unlock()
+
 	if string(readB) != "Gelas A" {
 		t.Errorf("Copy failed. Expected 'Gelas A', got '%s'", readB)
 	}
