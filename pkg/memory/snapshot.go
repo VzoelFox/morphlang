@@ -9,6 +9,9 @@ import (
 // Snapshot saves the entire memory state to a file.
 // Format: Gob Stream (Cabinet Metadata, then Drawer 0 Blob, Drawer 1 Blob, ...)
 func Snapshot(filename string) error {
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -59,6 +62,9 @@ func Snapshot(filename string) error {
 // Strategy: Load all data into the Swap File and mark all Drawers as "Swapped".
 // This minimizes RAM usage usage initially and relies on Demand Paging.
 func Restore(filename string) error {
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
 	f, err := os.Open(filename)
 	if err != nil {
 		return err

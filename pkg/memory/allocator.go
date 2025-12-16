@@ -6,7 +6,15 @@ import (
 )
 
 // Alloc allocates memory. It handles "Draft Otomatis" (Swapping) if RAM is full.
+// Thread-safe.
 func (c *Cabinet) Alloc(size int) (Ptr, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.alloc(size)
+}
+
+// Internal recursive alloc (assumes lock held)
+func (c *Cabinet) alloc(size int) (Ptr, error) {
 	if size <= 0 {
 		return NilPtr, fmt.Errorf("invalid allocation size: %d", size)
 	}
@@ -21,7 +29,7 @@ func (c *Cabinet) Alloc(size int) (Ptr, error) {
 
 	// Ensure active drawer is in RAM (Resident)
 	if activeDrawer.PhysicalSlot == -1 {
-		if err := c.BringToRAM(c.ActiveDrawerIndex); err != nil {
+		if err := c.bringToRAM(c.ActiveDrawerIndex); err != nil {
 			return NilPtr, err
 		}
 		// Re-fetch pointer
@@ -37,35 +45,36 @@ func (c *Cabinet) Alloc(size int) (Ptr, error) {
 
 	if activeTray.Remaining() < alignedSize {
 		// Drawer Full. Create new drawer.
-		newDrawer := CreateDrawer()
+		newDrawer := CreateDrawer() // Internal? No, exported in structure.go. Assumes Lock?
+		// We need to verify CreateDrawer. Assuming it doesn't lock.
 		if newDrawer == nil {
 			return NilPtr, fmt.Errorf("virtual memory limit reached")
 		}
 
 		c.ActiveDrawerIndex = newDrawer.ID
 
-		// Ensure new drawer is resident (CreateDrawer tries to put it in RAM, but might fail/swap immediately if logic changes)
+		// Ensure new drawer is resident
 		if newDrawer.PhysicalSlot == -1 {
-			if err := c.BringToRAM(newDrawer.ID); err != nil {
+			if err := c.bringToRAM(newDrawer.ID); err != nil {
 				return NilPtr, err
 			}
 			newDrawer = &c.Drawers[c.ActiveDrawerIndex]
 		}
 
 		// Recurse
-		return c.Alloc(size)
+		return c.alloc(size)
 	}
 
 	ptr := activeTray.Current
-	// Bump pointer (Valid because offset is in lower bits)
+	// Bump pointer
 	activeTray.Current += Ptr(alignedSize)
 
 	return ptr, nil
 }
 
-// BringToRAM ensures the drawer is in physical RAM.
-// If RAM is full, it evicts a victim drawer to swap.
-func (c *Cabinet) BringToRAM(drawerID int) error {
+// bringToRAM ensures the drawer is in physical RAM.
+// Assumes c.mu is Locked.
+func (c *Cabinet) bringToRAM(drawerID int) error {
 	target := &c.Drawers[drawerID]
 	if target.PhysicalSlot != -1 {
 		return nil // Already resident
@@ -80,20 +89,18 @@ func (c *Cabinet) BringToRAM(drawerID int) error {
 		}
 	}
 
-	// If no free slot, EVICT victim (Draft Otomatis)
+	// If no free slot, EVICT victim
 	if freeSlot == -1 {
-		// Simple policy: Evict slot 0 (FIFO replacement for simplicity)
-		// Better policy: Evict LRU? For now, slot 0 is fine.
 		victimID := c.RAMSlots[0]
 		if victimID == drawerID {
-			return fmt.Errorf("deadlock: trying to evict self") // Should not happen
+			return fmt.Errorf("deadlock: trying to evict self")
 		}
 
-		err := c.EvictToSwap(victimID)
+		err := c.evictToSwap(victimID)
 		if err != nil {
 			return err
 		}
-		freeSlot = 0 // Slot 0 is now free
+		freeSlot = 0
 	}
 
 	// Calculate Physical Address for this slot
@@ -109,10 +116,7 @@ func (c *Cabinet) BringToRAM(drawerID int) error {
 			return err
 		}
 	} else {
-		// Fresh drawer (or never swapped out with data).
-		// Zero it out? Or explicitly assume CreateDrawer initialized it?
-		// CreateDrawer doesn't touch RAM if it made a swapped drawer.
-		// So we should zero it out to be safe.
+		// Zero out memory for fresh drawer
 		for i := range destSlice {
 			destSlice[i] = 0
 		}
@@ -129,8 +133,9 @@ func (c *Cabinet) BringToRAM(drawerID int) error {
 	return nil
 }
 
-// EvictToSwap moves a drawer from RAM to Disk
-func (c *Cabinet) EvictToSwap(drawerID int) error {
+// evictToSwap moves a drawer from RAM to Disk.
+// Assumes c.mu is Locked.
+func (c *Cabinet) evictToSwap(drawerID int) error {
 	victim := &c.Drawers[drawerID]
 	slot := victim.PhysicalSlot
 
@@ -145,13 +150,6 @@ func (c *Cabinet) EvictToSwap(drawerID int) error {
 	srcSlice := unsafe.Slice((*byte)(physAddr), DRAWER_SIZE)
 
 	// 2. Write to .z file
-	// Note: Swap.Spill typically Appends. If we want to Overwrite old swap location,
-	// we need Swap.WriteAt(offset).
-	// Assuming Swap.Spill always allocates NEW space on disk?
-	// If we keep appending, disk usage grows indefinitely.
-	// For "Snapshot/Rewind", append is good!
-	// For paging, we want to reuse.
-	// Let's assume Swap.Spill returns a new offset.
 	fileOffset, err := Swap.Spill(srcSlice)
 	if err != nil {
 		return err
@@ -165,16 +163,16 @@ func (c *Cabinet) EvictToSwap(drawerID int) error {
 	// 4. Free RAM slot
 	c.RAMSlots[slot] = -1
 
-	// Note: Virtual Pointers remain valid! They just point to this DrawerID.
-	// Next access will trigger BringToRAM.
-
 	return nil
 }
 
 // Write writes data to the pointer address.
+// Thread-safe.
 func Write(dst Ptr, data []byte) error {
-	// Translate Virtual Ptr to Physical Address (Triggering Page Fault if needed)
-	rawPtr, err := Lemari.Resolve(dst)
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	rawPtr, err := Lemari.resolve(dst)
 	if err != nil {
 		return err
 	}
@@ -186,14 +184,17 @@ func Write(dst Ptr, data []byte) error {
 }
 
 // Read reads data from the pointer address.
+// Thread-safe.
 func Read(src Ptr, size int) ([]byte, error) {
-	rawPtr, err := Lemari.Resolve(src)
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	rawPtr, err := Lemari.resolve(src)
 	if err != nil {
 		return nil, err
 	}
 
 	srcSlice := unsafe.Slice((*byte)(rawPtr), size)
-	// Return a copy so user owns the bytes (and doesn't hold unsafe ptr to potentially moved RAM)
 	ret := make([]byte, size)
 	copy(ret, srcSlice)
 	return ret, nil

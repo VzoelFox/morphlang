@@ -19,17 +19,14 @@ func TestIntegerLifecycle(t *testing.T) {
 	}
 
 	// 2. Read Header
-	header, err := GetHeader(ptr)
+	header, err := ReadHeader(ptr)
 	if err != nil {
-		t.Fatalf("GetHeader failed: %v", err)
+		t.Fatalf("ReadHeader failed: %v", err)
 	}
 	if header.Type != TagInteger {
 		t.Errorf("Wrong tag. Expected %d, got %d", TagInteger, header.Type)
 	}
 	// Size should be HeaderSize (padded?) + 8
-	// Header struct has Type(1) + Size(4) = 5 bytes?
-	// Go struct padding implies Header might be 8 bytes?
-	// unsafe.Sizeof(Header{}) usually 8 if aligned.
 	if int(header.Size) < 8+8 {
 		t.Errorf("Suspicious size: %d", header.Size)
 	}

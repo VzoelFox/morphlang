@@ -5,12 +5,12 @@ import (
 	"unsafe"
 )
 
-// Resolve translates a Virtual Ptr to a Physical unsafe.Pointer.
+// resolve translates a Virtual Ptr to a Physical unsafe.Pointer.
 // It handles Page Faults by bringing the required Drawer into RAM.
 // It returns a pointer to the start of the data.
-// WARNING: The returned pointer is valid ONLY until the next Alloc or Resolve call,
-// because a subsequent call might trigger eviction/swapping of this drawer.
-func (c *Cabinet) Resolve(p Ptr) (unsafe.Pointer, error) {
+// WARNING: The returned pointer is valid ONLY while the Cabinet lock is held.
+// Assumes c.mu is Locked.
+func (c *Cabinet) resolve(p Ptr) (unsafe.Pointer, error) {
 	if p == NilPtr {
 		return nil, fmt.Errorf("segmentation fault: nil pointer")
 	}
@@ -22,15 +22,13 @@ func (c *Cabinet) Resolve(p Ptr) (unsafe.Pointer, error) {
 		return nil, fmt.Errorf("segmentation fault: invalid drawer id %d", id)
 	}
 
-	// Lock the cabinet? (Single threaded for now)
-
 	drawer := &c.Drawers[id]
 
 	// Check if in RAM (PhysicalSlot != -1)
 	if drawer.PhysicalSlot == -1 {
 		// Page Fault! Bring to RAM.
 		// This might evict someone else.
-		if err := c.BringToRAM(id); err != nil {
+		if err := c.bringToRAM(id); err != nil {
 			return nil, fmt.Errorf("page fault error: %v", err)
 		}
 		// Re-fetch drawer pointer

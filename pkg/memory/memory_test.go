@@ -45,12 +45,18 @@ func TestAllocationAndWrite(t *testing.T) {
 		t.Fatalf("Write failed: %v", err)
 	}
 
-	// Verify data
-	rawPtr, err := Lemari.Resolve(ptr)
+	// Verify data manually
+	Lemari.mu.Lock()
+	rawPtr, err := Lemari.resolve(ptr)
 	if err != nil {
+		Lemari.mu.Unlock()
 		t.Fatal(err)
 	}
-	readData := unsafe.Slice((*byte)(rawPtr), size)
+	// Copy data out immediately to be safe
+	srcSlice := unsafe.Slice((*byte)(rawPtr), size)
+	readData := make([]byte, size)
+	copy(readData, srcSlice)
+	Lemari.mu.Unlock()
 
 	if !bytes.Equal(readData, data) {
 		t.Errorf("Memory corruption! Expected %s, got %s", data, readData)
@@ -65,7 +71,7 @@ func TestManualCopy(t *testing.T) {
 	ptrA, _ := Lemari.Alloc(len(dataA))
 	Write(ptrA, dataA)
 
-	// 2. Allocate space for "Glass B" (in same tray for now)
+	// 2. Allocate space for "Glass B"
 	ptrB, _ := Lemari.Alloc(len(dataA))
 
 	// 3. Manual Copy (Move A to B)
@@ -75,11 +81,17 @@ func TestManualCopy(t *testing.T) {
 	}
 
 	// 4. Verify B has A's content
-	rawB, err := Lemari.Resolve(ptrB)
+	Lemari.mu.Lock()
+	rawB, err := Lemari.resolve(ptrB)
 	if err != nil {
+		Lemari.mu.Unlock()
 		t.Fatal(err)
 	}
-	readB := unsafe.Slice((*byte)(rawB), len(dataA))
+	srcSlice := unsafe.Slice((*byte)(rawB), len(dataA))
+	readB := make([]byte, len(dataA))
+	copy(readB, srcSlice)
+	Lemari.mu.Unlock()
+
 	if string(readB) != "Gelas A" {
 		t.Errorf("Copy failed. Expected 'Gelas A', got '%s'", readB)
 	}

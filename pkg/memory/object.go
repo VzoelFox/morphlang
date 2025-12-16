@@ -25,12 +25,15 @@ type Header struct {
 // Size of header
 const HeaderSize = int(unsafe.Sizeof(Header{})) // Should be 8 usually (1 byte + 4 bytes + padding)
 
-// GetHeader reads the header at the given pointer.
-// It resolves the virtual pointer.
-func GetHeader(ptr Ptr) (*Header, error) {
-	raw, err := Lemari.Resolve(ptr)
+// ReadHeader reads the header at the given pointer safely.
+// It returns a copy of the Header struct.
+func ReadHeader(ptr Ptr) (Header, error) {
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	raw, err := Lemari.resolve(ptr)
 	if err != nil {
-		return nil, err
+		return Header{}, err
 	}
-	return (*Header)(raw), nil
+	return *(*Header)(raw), nil
 }

@@ -1,5 +1,7 @@
 package memory
 
+import "sync"
+
 // Constants for sizing
 const (
 	TRAY_SIZE   = 64 * 1024       // 64KB per Tray
@@ -39,6 +41,8 @@ type Drawer struct {
 
 // Cabinet represents the entire Heap (Lemari).
 type Cabinet struct {
+	mu sync.Mutex
+
 	// Virtual Drawers
 	Drawers []Drawer
 
