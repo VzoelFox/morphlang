@@ -117,6 +117,16 @@ func (vm *VM) Run() error {
 		case compiler.OpPop:
 			vm.pop()
 
+		case compiler.OpDup:
+			top := vm.StackTop()
+			if top == nil {
+				return fmt.Errorf("stack underflow on dup")
+			}
+			err := vm.push(top)
+			if err != nil {
+				return err
+			}
+
 		case compiler.OpJump:
 			pos := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip = pos - 1
