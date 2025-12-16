@@ -19,7 +19,10 @@ func TestIntegerLifecycle(t *testing.T) {
 	}
 
 	// 2. Read Header
-	header := GetHeader(ptr)
+	header, err := GetHeader(ptr)
+	if err != nil {
+		t.Fatalf("GetHeader failed: %v", err)
+	}
 	if header.Type != TagInteger {
 		t.Errorf("Wrong tag. Expected %d, got %d", TagInteger, header.Type)
 	}
@@ -32,7 +35,10 @@ func TestIntegerLifecycle(t *testing.T) {
 	}
 
 	// 3. Read Value
-	readVal := ReadInteger(ptr)
+	readVal, err := ReadInteger(ptr)
+	if err != nil {
+		t.Fatalf("ReadInteger failed: %v", err)
+	}
 	if readVal != val {
 		t.Errorf("Data corruption! Expected %d, got %d", val, readVal)
 	}
@@ -44,13 +50,20 @@ func TestIntegerLifecycle(t *testing.T) {
 		t.Error("Allocator returned same address for second object")
 	}
 
-	readVal2 := ReadInteger(ptr2)
+	readVal2, err := ReadInteger(ptr2)
+	if err != nil {
+		t.Fatalf("ReadInteger 2 failed: %v", err)
+	}
 	if readVal2 != val2 {
 		t.Errorf("Second object corruption. Expected %d, got %d", val2, readVal2)
 	}
 
 	// Verify first object still intact
-	if ReadInteger(ptr) != val {
+	val1, err := ReadInteger(ptr)
+	if err != nil {
+		t.Fatalf("ReadInteger 1 failed: %v", err)
+	}
+	if val1 != val {
 		t.Error("First object overwritten!")
 	}
 }

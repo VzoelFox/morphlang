@@ -15,29 +15,54 @@ func AllocInteger(value int64) (Ptr, error) {
 	}
 
 	// 1. Write Header
-	header := GetHeader(ptr)
+	header, err := GetHeader(ptr)
+	if err != nil {
+		return NilPtr, err
+	}
 	header.Type = TagInteger
 	header.Size = uint32(totalSize)
 
 	// 2. Write Value
 	// Value is located immediately after Header
-	valuePtr := unsafe.Pointer(uintptr(ptr.ToUnsafe()) + uintptr(HeaderSize))
+	headerPtr := unsafe.Pointer(header)
+	valuePtr := unsafe.Pointer(uintptr(headerPtr) + uintptr(HeaderSize))
 	*(*int64)(valuePtr) = value
 
 	return ptr, nil
 }
 
 // ReadInteger reads the value of a raw Integer object.
-func ReadInteger(ptr Ptr) int64 {
-	// Safety check (minimal)
+func ReadInteger(ptr Ptr) (int64, error) {
 	if ptr == NilPtr {
-		return 0 // Panic?
+		return 0, nil // Or error?
+	}
+
+	// Resolve pointer
+	raw, err := Lemari.Resolve(ptr)
+	if err != nil {
+		return 0, err
 	}
 
 	// Check Tag?
-	// header := GetHeader(ptr)
-	// if header.Type != TagInteger { panic("Type mismatch") }
+	// header := (*Header)(raw)
+	// if header.Type != TagInteger { ... }
 
-	valuePtr := unsafe.Pointer(uintptr(ptr.ToUnsafe()) + uintptr(HeaderSize))
-	return *(*int64)(valuePtr)
+	valuePtr := unsafe.Pointer(uintptr(raw) + uintptr(HeaderSize))
+	return *(*int64)(valuePtr), nil
+}
+
+// WriteInteger updates the value of an existing Integer object.
+func WriteInteger(ptr Ptr, value int64) error {
+	if ptr == NilPtr {
+		return nil
+	}
+
+	raw, err := Lemari.Resolve(ptr)
+	if err != nil {
+		return err
+	}
+
+	valuePtr := unsafe.Pointer(uintptr(raw) + uintptr(HeaderSize))
+	*(*int64)(valuePtr) = value
+	return nil
 }
