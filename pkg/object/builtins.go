@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 )
 
 type BuiltinDef struct {
@@ -318,6 +319,64 @@ var Builtins = []BuiltinDef{
 			return &Integer{Value: int64(res)}
 		}},
 	},
+}
+
+func init() {
+	// waktu_sekarang() -> Time
+	RegisterBuiltin("waktu_sekarang", func(args ...Object) Object {
+		return &Time{Value: time.Now()}
+	})
+
+	// waktu_unix() -> Integer
+	RegisterBuiltin("waktu_unix", func(args ...Object) Object {
+		return &Integer{Value: time.Now().Unix()}
+	})
+
+	// tidur(milidetik) -> Null
+	RegisterBuiltin("tidur", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+
+		ms, ok := args[0].(*Integer)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument to `tidur` must be INTEGER, got %s", args[0].Type())}
+		}
+
+		time.Sleep(time.Duration(ms.Value) * time.Millisecond)
+		return &Null{}
+	})
+
+	// format_waktu(waktu, format_str) -> String
+	// Supports "RFC3339", "ANSIC", "UnixDate", "RubyDate", "RFC822", "RFC822Z", "RFC850", "RFC1123", "RFC1123Z"
+	// Or custom Go layout string
+	RegisterBuiltin("format_waktu", func(args ...Object) Object {
+		if len(args) != 2 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
+		}
+
+		tObj, ok := args[0].(*Time)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("first argument to `format_waktu` must be TIME, got %s", args[0].Type())}
+		}
+
+		formatObj, ok := args[1].(*String)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("second argument to `format_waktu` must be STRING, got %s", args[1].Type())}
+		}
+
+		layout := formatObj.Value
+		switch layout {
+		case "RFC3339":
+			layout = time.RFC3339
+		case "ANSIC":
+			layout = time.ANSIC
+		case "UnixDate":
+			layout = time.UnixDate
+		}
+
+		return &String{Value: tObj.Value.Format(layout)}
+	})
 }
 
 // RegisterBuiltin registers a new builtin function dynamically.
