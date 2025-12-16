@@ -25,6 +25,7 @@ const (
 	COMPILED_FUNCTION_OBJ = "COMPILED_FUNCTION"
 	CLOSURE_OBJ           = "CLOSURE"
 	CHANNEL_OBJ           = "CHANNEL"
+	THREAD_OBJ            = "THREAD"
 )
 
 type Object interface {
@@ -118,6 +119,13 @@ type Channel struct {
 
 func (c *Channel) Type() ObjectType { return CHANNEL_OBJ }
 func (c *Channel) Inspect() string  { return fmt.Sprintf("saluran[%p]", c.Value) }
+
+type Thread struct {
+	Result chan Object
+}
+
+func (t *Thread) Type() ObjectType { return THREAD_OBJ }
+func (t *Thread) Inspect() string  { return fmt.Sprintf("utas[%p]", t.Result) }
 
 type BuiltinFunction func(args ...Object) Object
 
