@@ -1,6 +1,8 @@
 package memory
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 // ObjectType tag (byte)
 type TypeTag uint8
@@ -21,10 +23,17 @@ type Header struct {
 }
 
 // Size of header
-const HeaderSize = int(unsafe.Sizeof(Header{}))
+const HeaderSize = int(unsafe.Sizeof(Header{})) // Should be 8 usually (1 byte + 4 bytes + padding)
 
-// GetHeader reads the header at the given pointer
-func GetHeader(ptr Ptr) *Header {
-	raw := ptr.ToUnsafe()
-	return (*Header)(raw)
+// ReadHeader reads the header at the given pointer safely.
+// It returns a copy of the Header struct.
+func ReadHeader(ptr Ptr) (Header, error) {
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	raw, err := Lemari.resolve(ptr)
+	if err != nil {
+		return Header{}, err
+	}
+	return *(*Header)(raw), nil
 }

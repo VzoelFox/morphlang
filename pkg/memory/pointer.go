@@ -1,31 +1,50 @@
 package memory
 
-import "unsafe"
-
-// Ptr represents a virtual address in our Arena.
-// It is essentially an offset from the Arena base address.
+// Ptr represents a VIRTUAL address in our Morph Memory System.
+// Unlike a standard pointer, it does not point to a physical memory address directly.
+// Instead, it acts like a handle:
+//
+//   [  Drawer ID (32 bits)  ] [   Offset (32 bits)    ]
+//   Total 64 bits.
+//
+// This indirection allows us to move "Drawers" (Memory Pages) between RAM and Disk
+// (Swapping/Draft Otomatis) without breaking the pointers held by the program.
+//
+// To access the data, you must call `Resolve()` which translates this Virtual Ptr
+// to a Physical unsafe.Pointer (and potentially triggers a page fault/swap-in).
 type Ptr uint64
 
-// NilPtr represents a null pointer (0 offset? Or -1? Let's use 0 and reserve address 0).
-const NilPtr Ptr = 0
+const (
+	NilPtr Ptr = 0
+)
 
-// ToUnsafe converts our virtual Ptr to a real Go unsafe.Pointer.
-// WARNING: This is valid only as long as `RAM` does not move (which it won't, as it's a global array).
-func (p Ptr) ToUnsafe() unsafe.Pointer {
-	if p == NilPtr {
-		return nil
-	}
-	base := uintptr(RAM.BasePointer())
-	return unsafe.Pointer(base + uintptr(p))
+// Bit masks and shifts
+const (
+	OffsetMask = 0xFFFFFFFF
+	DrawerShift = 32
+)
+
+// NewPtr creates a Virtual Pointer from Drawer ID and Offset.
+func NewPtr(drawerID int, offset uint32) Ptr {
+	return Ptr(uint64(drawerID)<<DrawerShift | uint64(offset))
 }
 
-// FromUnsafe creates a Ptr from a real pointer.
-// Use with extreme caution.
-func FromUnsafe(p unsafe.Pointer) Ptr {
-	if p == nil {
-		return NilPtr
-	}
-	base := uintptr(RAM.BasePointer())
-	addr := uintptr(p)
-	return Ptr(addr - base)
+// DrawerID extracts the Drawer ID from the virtual pointer.
+func (p Ptr) DrawerID() int {
+	return int(uint64(p) >> DrawerShift)
+}
+
+// Offset extracts the intra-drawer offset from the virtual pointer.
+func (p Ptr) Offset() uint32 {
+	return uint32(uint64(p) & OffsetMask)
+}
+
+// Add adds an offset to the pointer.
+// Note: This does not handle crossing Drawer boundaries!
+// If an object spans across drawers, we are in trouble.
+// For now, we assume objects fit in a single Drawer (128KB).
+func (p Ptr) Add(offset uint32) Ptr {
+	newOffset := p.Offset() + offset
+	// We could check for overflow here
+	return NewPtr(p.DrawerID(), newOffset)
 }
