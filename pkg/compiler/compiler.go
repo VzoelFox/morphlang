@@ -92,6 +92,11 @@ func (c *Compiler) Compile(node parser.Node) error {
 	case *parser.Identifier:
 		symbol, ok := c.symbolTable.Resolve(node.Value)
 		if !ok {
+			builtinIndex := object.GetBuiltinByName(node.Value)
+			if builtinIndex >= 0 {
+				c.emit(OpGetBuiltin, builtinIndex)
+				return nil
+			}
 			return fmt.Errorf("undefined variable %s", node.Value)
 		}
 
@@ -417,6 +422,9 @@ func (c *Compiler) removeLastPop() {
 	previous := c.scopes[c.scopeIndex].previousInstruction
 
 	old := c.currentInstructions()
+	if last.Position >= len(old) {
+		return
+	}
 	new := old[:last.Position]
 
 	c.scopes[c.scopeIndex].instructions = new

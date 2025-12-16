@@ -157,6 +157,16 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+		case compiler.OpGetBuiltin:
+			builtinIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+
+			definition := object.Builtins[builtinIndex]
+			err := vm.push(definition.Builtin)
+			if err != nil {
+				return err
+			}
+
 		case compiler.OpArray:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
@@ -207,7 +217,6 @@ func (vm *VM) Run() error {
 			frame := vm.popFrame()
 			vm.sp = frame.basePointer - 1 // Pop locals AND function
 			if vm.sp < 0 {
-				// Should not happen unless stack underflow
 				return fmt.Errorf("stack underflow on return")
 			}
 
@@ -247,8 +256,25 @@ func (vm *VM) executeCall(numArgs int) error {
 		vm.sp = frame.basePointer + callee.NumLocals
 		return nil
 
+	case *object.Builtin:
+		return vm.executeBuiltinCall(callee, numArgs)
+
 	default:
 		return fmt.Errorf("calling non-function")
+	}
+}
+
+func (vm *VM) executeBuiltinCall(builtin *object.Builtin, numArgs int) error {
+	args := vm.stack[vm.sp-numArgs : vm.sp]
+
+	result := builtin.Fn(args...)
+
+	vm.sp = vm.sp - numArgs - 1 // Pop args + function
+
+	if result != nil {
+		return vm.push(result)
+	} else {
+		return vm.push(Null)
 	}
 }
 

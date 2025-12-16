@@ -14,6 +14,7 @@ const (
 	OpStoreGlobal Opcode = 0x12
 	OpLoadLocal  Opcode = 0x13
 	OpStoreLocal Opcode = 0x14
+	OpGetBuiltin Opcode = 0x15
 
 	// Collections
 	OpArray Opcode = 0x1A
@@ -54,6 +55,7 @@ var definitions = map[Opcode]*Definition{
 	OpStoreGlobal: {"OpStoreGlobal", []int{2}}, // u16 index
 	OpLoadLocal:   {"OpLoadLocal", []int{1}}, // u8 index
 	OpStoreLocal:  {"OpStoreLocal", []int{1}}, // u8 index
+	OpGetBuiltin:  {"OpGetBuiltin", []int{1}}, // u8 index
 	OpArray:       {"OpArray", []int{2}}, // u16 element count
 	OpHash:        {"OpHash", []int{2}}, // u16 pair count (keys + values)
 	OpIndex:       {"OpIndex", []int{}},
