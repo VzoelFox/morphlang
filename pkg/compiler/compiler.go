@@ -58,6 +58,24 @@ func (c *Compiler) Compile(node parser.Node) error {
 		if node.Expression == nil {
 			return nil
 		}
+
+		// Handle named function declarations: define variable and store it
+		if fn, ok := node.Expression.(*parser.FunctionLiteral); ok && fn.Name != "" {
+			symbol := c.symbolTable.Define(fn.Name)
+
+			err := c.Compile(fn)
+			if err != nil {
+				return err
+			}
+
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+			return nil
+		}
+
 		err := c.Compile(node.Expression)
 		if err != nil {
 			return err
@@ -102,8 +120,10 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 		if symbol.Scope == GlobalScope {
 			c.emit(OpLoadGlobal, symbol.Index)
-		} else {
+		} else if symbol.Scope == LocalScope {
 			c.emit(OpLoadLocal, symbol.Index)
+		} else if symbol.Scope == FreeScope {
+			c.emit(OpGetFree, symbol.Index)
 		}
 
 	case *parser.IfExpression:
@@ -219,6 +239,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpDiv)
 		case ">":
 			c.emit(OpGreaterThan)
+		case ">=":
+			c.emit(OpGreaterEqual)
 		case "==":
 			c.emit(OpEqual)
 		case "!=":
@@ -315,7 +337,23 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 		numLocals := c.symbolTable.numDefinitions
+		freeSymbols := c.symbolTable.FreeSymbols
 		instructions := c.LeaveScope()
+
+		for _, s := range freeSymbols {
+			symbol, ok := c.symbolTable.Resolve(s.Name)
+			if !ok {
+				return fmt.Errorf("free variable %s could not be resolved", s.Name)
+			}
+
+			if symbol.Scope == GlobalScope {
+				c.emit(OpLoadGlobal, symbol.Index)
+			} else if symbol.Scope == LocalScope {
+				c.emit(OpLoadLocal, symbol.Index)
+			} else if symbol.Scope == FreeScope {
+				c.emit(OpGetFree, symbol.Index)
+			}
+		}
 
 		compiledFn := &object.CompiledFunction{
 			Instructions:  instructions,
@@ -323,7 +361,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 			NumParameters: len(node.Parameters),
 		}
 
-		c.emit(OpLoadConst, c.addConstant(compiledFn))
+		fnIndex := c.addConstant(compiledFn)
+		c.emit(OpClosure, fnIndex, len(freeSymbols))
 
 	case *parser.ReturnStatement:
 		err := c.Compile(node.ReturnValue)
