@@ -318,25 +318,25 @@ morph/
 
 ---
 
-### **PHASE 6: Standard Library (Week 17-20) - OPTIONAL**
+### **PHASE 6: Standard Library (Week 17-20)**
 
 **Patch 6.1: I/O Module**
-- [ ] `baca_file(path)` - read file
-- [ ] `tulis_file(path, content)` - write file
-- [ ] `input(prompt)` - read user input
+- [x] `baca_file(path)` - read file
+- [x] `tulis_file(path, content)` - write file
+- [x] `input(prompt)` - read user input
 
 **Patch 6.2: String Module**
-- [ ] `pisah(str, delim)` - split
-- [ ] `gabung(list, delim)` - join
-- [ ] `huruf_besar(str)` - uppercase
-- [ ] `huruf_kecil(str)` - lowercase
+- [x] `pisah(str, delim)` - split
+- [x] `gabung(list, delim)` - join
+- [x] `huruf_besar(str)` - uppercase
+- [x] `huruf_kecil(str)` - lowercase
 
 **Patch 6.3: Math Module**
-- [ ] `abs(x)`, `max(a, b)`, `min(a, b)`
-- [ ] `pow(x, y)`, `sqrt(x)`
+- [x] `abs(x)`, `max(a, b)`, `min(a, b)`
+- [x] `pow(x, y)`, `sqrt(x)`
 
 **Deliverables:**
-- [ ] 50+ stdlib tests
+- [x] 50+ stdlib tests (Integrated in VM tests)
 - [ ] Documented stdlib API
 
 ---

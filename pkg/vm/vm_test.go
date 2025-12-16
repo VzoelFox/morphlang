@@ -267,6 +267,13 @@ func runVmTests(t *testing.T, tests interface{}) {
 		}
 	case []struct {
 		input    string
+		expected []string
+	}:
+		for _, tt := range tests {
+			runVmTest(t, tt.input, tt.expected)
+		}
+	case []struct {
+		input    string
 		expected map[object.HashKey]int64
 	}:
 		for _, tt := range tests {
@@ -322,6 +329,19 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 		}
 		for i, expectedVal := range expected {
 			testIntegerObject(t, result.Elements[i], expectedVal)
+		}
+	case []string:
+		result, ok := obj.(*object.Array)
+		if !ok {
+			t.Errorf("object is not Array. got=%T (%+v)", obj, obj)
+			return
+		}
+		if len(result.Elements) != len(expected) {
+			t.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(result.Elements))
+			return
+		}
+		for i, expectedVal := range expected {
+			testStringObject(t, result.Elements[i], expectedVal)
 		}
 	case map[object.HashKey]int64:
 		result, ok := obj.(*object.Hash)
