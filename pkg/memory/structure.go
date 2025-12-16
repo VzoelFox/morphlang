@@ -15,9 +15,9 @@ const (
 // Tray represents a semi-space (Nampan).
 // It's a contiguous block of memory where we bump-allocate objects.
 type Tray struct {
-	Start   Ptr    // Start offset in the Arena (relative to Drawer base if we used relative, but here it's absolute Ptr)
-	End     Ptr    // End offset
-	Current Ptr    // Current bump pointer
+	Start   Ptr    // Virtual Start Pointer
+	End     Ptr    // Virtual End Pointer
+	Current Ptr    // Current Virtual allocation pointer
 }
 
 // Drawer represents a memory region (Laci).
@@ -94,40 +94,42 @@ func CreateDrawer() *Drawer {
 		IsPrimaryActive: true,
 	}
 
+	SetupTrayPointers(&drawer)
+
 	if slot != -1 {
 		// Assign RAM
 		Lemari.RAMSlots[slot] = id
-		SetupTrayPointers(&drawer, slot)
 	} else {
 		// Created in "Swapped" state (or empty state waiting for swap in)
-		// For simplicity, we assume new drawers start in RAM.
-		// If RAM is full, we must Evict someone else first.
-		// But here we just create struct. Allocator handles eviction.
-		drawer.IsSwapped = true // Temporarily mark as swapped (empty)
+		drawer.IsSwapped = true
 	}
 
 	Lemari.Drawers = append(Lemari.Drawers, drawer)
 	return &Lemari.Drawers[id]
 }
 
-// SetupTrayPointers calculates absolute Ptrs based on PhysicalSlot
-func SetupTrayPointers(d *Drawer, slot int) {
-	// Base address logic
-	// Slot 0 starts at 8 (reserved null)
-	baseOffset := uintptr(8) + uintptr(slot)*uintptr(DRAWER_SIZE)
-	base := Ptr(baseOffset)
+// SetupTrayPointers sets up the VIRTUAL pointers for the drawer.
+// These are invariant of the physical location.
+func SetupTrayPointers(d *Drawer) {
+	// Reserve address 0 (NilPtr) if this is Drawer 0
+	baseOffset := uint32(0)
+	if d.ID == 0 {
+		baseOffset = 8
+	}
 
-	d.PrimaryTray.Start = base
-	d.PrimaryTray.Current = base
-	d.PrimaryTray.End = base + Ptr(TRAY_SIZE)
+	start := NewPtr(d.ID, baseOffset)
+	mid   := NewPtr(d.ID, uint32(TRAY_SIZE))
+	end   := NewPtr(d.ID, uint32(DRAWER_SIZE))
 
-	base += Ptr(TRAY_SIZE)
+	d.PrimaryTray.Start = start
+	d.PrimaryTray.Current = start
+	d.PrimaryTray.End = mid
 
-	d.SecondaryTray.Start = base
-	d.SecondaryTray.Current = base
-	d.SecondaryTray.End = base + Ptr(TRAY_SIZE)
+	d.SecondaryTray.Start = mid
+	d.SecondaryTray.Current = mid
+	d.SecondaryTray.End = end
 }
 
 func (t *Tray) Remaining() int {
-	return int(t.End - t.Current)
+	return int(t.End) - int(t.Current)
 }

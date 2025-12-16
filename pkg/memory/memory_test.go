@@ -18,8 +18,10 @@ func TestCabinetInitialization(t *testing.T) {
 		t.Error("Primary tray should be active initially")
 	}
 
-	if drawer.PrimaryTray.Remaining() != TRAY_SIZE {
-		t.Errorf("Expected tray size %d, got %d", TRAY_SIZE, drawer.PrimaryTray.Remaining())
+	// Drawer 0 reserves 8 bytes
+	expectedSize := TRAY_SIZE - 8
+	if drawer.PrimaryTray.Remaining() != expectedSize {
+		t.Errorf("Expected tray size %d, got %d", expectedSize, drawer.PrimaryTray.Remaining())
 	}
 }
 
@@ -44,7 +46,10 @@ func TestAllocationAndWrite(t *testing.T) {
 	}
 
 	// Verify data
-	rawPtr := ptr.ToUnsafe()
+	rawPtr, err := Lemari.Resolve(ptr)
+	if err != nil {
+		t.Fatal(err)
+	}
 	readData := unsafe.Slice((*byte)(rawPtr), size)
 
 	if !bytes.Equal(readData, data) {
@@ -70,7 +75,10 @@ func TestManualCopy(t *testing.T) {
 	}
 
 	// 4. Verify B has A's content
-	rawB := ptrB.ToUnsafe()
+	rawB, err := Lemari.Resolve(ptrB)
+	if err != nil {
+		t.Fatal(err)
+	}
 	readB := unsafe.Slice((*byte)(rawB), len(dataA))
 	if string(readB) != "Gelas A" {
 		t.Errorf("Copy failed. Expected 'Gelas A', got '%s'", readB)

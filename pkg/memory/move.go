@@ -12,8 +12,15 @@ func MemCpy(src Ptr, dst Ptr, size int) error {
 		return fmt.Errorf("memcpy: nil pointer access")
 	}
 
-	srcRaw := src.ToUnsafe()
-	dstRaw := dst.ToUnsafe()
+	srcRaw, err := Lemari.Resolve(src)
+	if err != nil {
+		return err
+	}
+
+	dstRaw, err := Lemari.Resolve(dst)
+	if err != nil {
+		return err
+	}
 
 	srcSlice := unsafe.Slice((*byte)(srcRaw), size)
 	dstSlice := unsafe.Slice((*byte)(dstRaw), size)
