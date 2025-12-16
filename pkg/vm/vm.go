@@ -347,7 +347,7 @@ func (vm *VM) spawn(args []object.Object) error {
 		constants:   vm.constants,
 		globals:     vm.globals,
 		stack:       [StackSize]object.Object{},
-		sp:          0,
+		sp:          cl.Fn.NumLocals, // Reserve space for locals on the stack
 		frames:      frames,
 		framesIndex: 1,
 	}

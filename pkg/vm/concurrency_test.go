@@ -52,3 +52,24 @@ func TestConcurrencyClosureCapture(t *testing.T) {
 
 	runVmTests(t, tests)
 }
+
+func TestConcurrencyComplexTypes(t *testing.T) {
+	// Reproduce bug where complex return types (Array/Hash) from builtins
+	// might be corrupted in spawned VM.
+	tests := []vmTestCase{
+		{
+			input: `
+			ch = saluran_baru(0)
+			luncurkan(fungsi()
+				# pisah returns Array ["a", "b"]
+				arr = pisah("a,b", ",")
+				val = arr[0]
+				kirim(ch, val)
+			akhir)
+			terima(ch)
+			`,
+			expected: "a",
+		},
+	}
+	runVmTests(t, tests)
+}
