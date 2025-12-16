@@ -191,6 +191,38 @@ func TestWhileLoops(t *testing.T) {
 	runVmTests(t, tests)
 }
 
+func TestFunctions(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"fungsi() kembalikan 5 + 10; akhir ();", 15},
+		{"fungsi() 5 + 10; akhir ();", 15},
+		{"fungsi() 1; 2; akhir ();", 2},
+		{"fungsi() 1; kembalikan 2; akhir ();", 2},
+		{"fungsi() kembalikan 1; 2; akhir ();", 1},
+		{"fungsi(a) a; akhir (24);", 24},
+		{"fungsi(a, b) a + b; akhir (1, 2);", 3},
+		{"global = 10; fungsi() global; akhir ();", 10},
+		{"global = 10; fungsi() global + 5; akhir ();", 15},
+		{"global = 10; fungsi() local = 5; global + local; akhir ();", 15},
+	}
+
+	runVmTests(t, tests)
+}
+
+func TestFunctionNoReturnValue(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{"fungsi() akhir ();", nil},
+		{"fungsi() 1; akhir ();", 1},
+	}
+
+	runVmTests(t, tests)
+}
+
 func runVmTests(t *testing.T, tests interface{}) {
 	switch tests := tests.(type) {
 	case []struct {
