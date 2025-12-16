@@ -54,4 +54,23 @@ func init() {
 	RegisterBuiltin("luncurkan", func(args ...Object) Object {
 		return &Error{Message: "luncurkan() requires VM context"}
 	})
+
+	// gabung(utas) -> Object
+	RegisterBuiltin("gabung", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		threadObj, ok := args[0].(*Thread)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument to `gabung` must be THREAD, got %s", args[0].Type())}
+		}
+
+		// Blocking wait
+		val, ok := <-threadObj.Result
+		if !ok {
+			// Channel closed without value? Should not happen with our implementation unless panic
+			return &Null{}
+		}
+		return val
+	})
 }

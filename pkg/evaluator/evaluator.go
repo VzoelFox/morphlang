@@ -290,8 +290,9 @@ func evalIdentifier(node *parser.Identifier, env *object.Environment) object.Obj
 		return val
 	}
 
-	if builtin, ok := builtins[node.Value]; ok {
-		return builtin
+	// Unification: Use VM builtins
+	if index := object.GetBuiltinByName(node.Value); index != -1 {
+		return object.Builtins[index].Builtin
 	}
 
 	return newError(node, "identifier not found: %s", node.Value)

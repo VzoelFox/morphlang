@@ -1,0 +1,32 @@
+cetak("Mulai tes waktu...")
+
+sekarang = waktu_sekarang()
+# Implicit conversion via cetak calling Inspect on arguments if I pass multiple?
+# Or manual conversion?
+# I removed `str` builtin earlier? No, I never implemented `str` builtin globally, I checked `builtins.go`.
+# `cetak` handles Inspect.
+
+cetak("Waktu sekarang (Inspect):")
+cetak(sekarang)
+
+formatted = format_waktu(sekarang, "RFC3339")
+cetak("Waktu sekarang (Formatted): " + formatted)
+
+unix = waktu_unix()
+cetak("Unix timestamp:")
+cetak(unix)
+
+cetak("Tidur 2 detik...")
+tidur(2000)
+cetak("Bangun!")
+
+sekarang2 = waktu_sekarang()
+diff = waktu_unix() - unix
+cetak("Selisih waktu (unix):")
+cetak(diff)
+
+jika diff >= 2
+    cetak("Tes Tidur SUKSES.")
+lainnya
+    cetak("Tes Tidur GAGAL (terlalu cepat).")
+akhir

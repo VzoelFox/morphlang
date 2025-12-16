@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
+	"time"
 
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
@@ -25,6 +26,8 @@ const (
 	COMPILED_FUNCTION_OBJ = "COMPILED_FUNCTION"
 	CLOSURE_OBJ           = "CLOSURE"
 	CHANNEL_OBJ           = "CHANNEL"
+	THREAD_OBJ            = "THREAD"
+	TIME_OBJ              = "TIME"
 )
 
 type Object interface {
@@ -118,6 +121,20 @@ type Channel struct {
 
 func (c *Channel) Type() ObjectType { return CHANNEL_OBJ }
 func (c *Channel) Inspect() string  { return fmt.Sprintf("saluran[%p]", c.Value) }
+
+type Thread struct {
+	Result chan Object
+}
+
+func (t *Thread) Type() ObjectType { return THREAD_OBJ }
+func (t *Thread) Inspect() string  { return fmt.Sprintf("utas[%p]", t.Result) }
+
+type Time struct {
+	Value time.Time
+}
+
+func (t *Time) Type() ObjectType { return TIME_OBJ }
+func (t *Time) Inspect() string  { return t.Value.Format(time.RFC3339) }
 
 type BuiltinFunction func(args ...Object) Object
 
