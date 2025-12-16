@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/VzoelFox/morphlang/pkg/lexer"
 	"github.com/VzoelFox/morphlang/pkg/object"
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
@@ -91,20 +92,44 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 	case *parser.AssignmentStatement:
-		err := c.Compile(node.Value)
-		if err != nil {
-			return err
-		}
+		switch name := node.Name.(type) {
+		case *parser.Identifier:
+			err := c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
 
-		symbol, ok := c.symbolTable.Resolve(node.Name.Value)
-		if !ok {
-			symbol = c.symbolTable.Define(node.Name.Value)
-		}
+			symbol, ok := c.symbolTable.Resolve(name.Value)
+			if !ok {
+				symbol = c.symbolTable.Define(name.Value)
+			}
 
-		if symbol.Scope == GlobalScope {
-			c.emit(OpStoreGlobal, symbol.Index)
-		} else {
-			c.emit(OpStoreLocal, symbol.Index)
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+
+		case *parser.IndexExpression:
+			err := c.Compile(name.Left)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(name.Index)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpSetIndex)
+
+		default:
+			return fmt.Errorf("assignment to %T not supported", node.Name)
 		}
 
 	case *parser.Identifier:
@@ -142,6 +167,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 		if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
 			c.removeLastPop()
+		} else {
+			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
 		}
 
 		// Jump over alternative if consequence was executed
@@ -161,6 +188,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 			if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
 				c.removeLastPop()
+			} else {
+				c.emit(OpLoadConst, c.addConstant(&object.Null{}))
 			}
 		}
 
@@ -215,6 +244,65 @@ func (c *Compiler) Compile(node parser.Node) error {
 				return err
 			}
 			c.emit(OpGreaterThan)
+			return nil
+		}
+
+		if node.Operator == "<=" {
+			err := c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+			err = c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+			c.emit(OpGreaterEqual)
+			return nil
+		}
+
+		if node.Token.Type == lexer.DAN {
+			err := c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpDup)
+			jumpPos := c.emit(OpJumpNotTruthy, 9999)
+
+			c.emit(OpPop)
+
+			err = c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+
+			afterRightPos := len(c.currentInstructions())
+			c.changeOperand(jumpPos, afterRightPos)
+			return nil
+		}
+
+		if node.Token.Type == lexer.ATAU {
+			err := c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpDup)
+			jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
+			jumpPos := c.emit(OpJump, 9999)
+
+			afterLeftPos := len(c.currentInstructions())
+			c.changeOperand(jumpNotTruthyPos, afterLeftPos)
+
+			c.emit(OpPop)
+
+			err = c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+
+			afterRightPos := len(c.currentInstructions())
+			c.changeOperand(jumpPos, afterRightPos)
 			return nil
 		}
 
@@ -275,6 +363,24 @@ func (c *Compiler) Compile(node parser.Node) error {
 	case *parser.StringLiteral:
 		str := &object.String{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(str))
+
+	case *parser.InterpolatedString:
+		if len(node.Parts) == 0 {
+			c.emit(OpLoadConst, c.addConstant(&object.String{Value: ""}))
+		} else {
+			err := c.Compile(node.Parts[0])
+			if err != nil {
+				return err
+			}
+
+			for i := 1; i < len(node.Parts); i++ {
+				err := c.Compile(node.Parts[i])
+				if err != nil {
+					return err
+				}
+				c.emit(OpAdd)
+			}
+		}
 
 	case *parser.ArrayLiteral:
 		for _, el := range node.Elements {

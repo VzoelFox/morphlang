@@ -11,6 +11,8 @@ import (
 const (
 	_ int = iota
 	LOWEST
+	OR          // atau
+	AND         // dan
 	EQUALS      // ==
 	LESSGREATER // > or <
 	SUM         // +
@@ -21,6 +23,8 @@ const (
 )
 
 var precedences = map[lexer.TokenType]int{
+	lexer.ATAU:     OR,
+	lexer.DAN:      AND,
 	lexer.EQ:       EQUALS,
 	lexer.NOT_EQ:   EQUALS,
 	lexer.LT:       LESSGREATER,
@@ -112,6 +116,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.GT, p.parseInfixExpression)
 	p.registerInfix(lexer.LTE, p.parseInfixExpression)
 	p.registerInfix(lexer.GTE, p.parseInfixExpression)
+	p.registerInfix(lexer.DAN, p.parseInfixExpression)
+	p.registerInfix(lexer.ATAU, p.parseInfixExpression)
 	p.registerInfix(lexer.LPAREN, p.parseCallExpression)
 	p.registerInfix(lexer.LBRACKET, p.parseIndexExpression)
 
@@ -189,30 +195,9 @@ func (p *Parser) parseStatement() Statement {
 	switch p.curToken.Type {
 	case lexer.KEMBALIKAN:
 		return p.parseReturnStatement()
-	case lexer.IDENT:
-		if p.peekTokenIs(lexer.ASSIGN) {
-			return p.parseAssignmentStatement()
-		}
-		return p.parseExpressionStatement()
 	default:
-		return p.parseExpressionStatement()
+		return p.parseExpressionOrAssignmentStatement()
 	}
-}
-
-func (p *Parser) parseAssignmentStatement() *AssignmentStatement {
-	stmt := &AssignmentStatement{Token: p.curToken}
-	stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
-
-	p.nextToken() // eat IDENT
-	p.nextToken() // eat =
-
-	stmt.Value = p.parseExpression(LOWEST)
-
-	if p.peekTokenIs(lexer.SEMICOLON) {
-		p.nextToken()
-	}
-
-	return stmt
 }
 
 func (p *Parser) parseReturnStatement() *ReturnStatement {
@@ -229,10 +214,25 @@ func (p *Parser) parseReturnStatement() *ReturnStatement {
 	return stmt
 }
 
-func (p *Parser) parseExpressionStatement() *ExpressionStatement {
-	stmt := &ExpressionStatement{Token: p.curToken}
+func (p *Parser) parseExpressionOrAssignmentStatement() Statement {
+	startToken := p.curToken
+	expr := p.parseExpression(LOWEST)
 
-	stmt.Expression = p.parseExpression(LOWEST)
+	if p.peekTokenIs(lexer.ASSIGN) {
+		p.nextToken() // move to =
+		assignToken := p.curToken
+		p.nextToken() // move to RHS
+
+		val := p.parseExpression(LOWEST)
+
+		if p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken()
+		}
+
+		return &AssignmentStatement{Token: assignToken, Name: expr, Value: val}
+	}
+
+	stmt := &ExpressionStatement{Token: startToken, Expression: expr}
 
 	if p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken()
@@ -471,7 +471,8 @@ func (p *Parser) parseInfixExpression(left Expression) Expression {
 func isBinaryOp(t lexer.TokenType) bool {
 	switch t {
 	case lexer.PLUS, lexer.MINUS, lexer.SLASH, lexer.ASTERISK,
-		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE:
+		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE,
+		lexer.DAN, lexer.ATAU:
 		return true
 	}
 	return false

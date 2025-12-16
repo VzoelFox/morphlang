@@ -345,9 +345,9 @@ morph/
 
 **Goal:** Create a custom memory allocator to replace Go's GC dependency.
 
-- [ ] Define `pkg/memory` structure (Arena, Ptr)
-- [ ] Implement simple allocator (Bump Pointer)
-- [ ] Implement advanced allocator (Free List / Slab)
+- [x] Define `pkg/memory` structure (Arena, Ptr)
+- [x] Implement simple allocator (Bump Pointer)
+- [x] Implement advanced allocator (Cabinet/Drawer/Tray model)
 - [ ] Integrate with `pkg/object` (Refactor Object to use Ptr)
 
 ---
