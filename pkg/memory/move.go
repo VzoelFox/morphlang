@@ -16,20 +16,28 @@ func MemCpy(src Ptr, dst Ptr, size int) error {
 	Lemari.mu.Lock()
 	defer Lemari.mu.Unlock()
 
+	// 1. Resolve SRC and Copy to Temp Buffer
+	// We must buffer because resolving DST later might evict the drawer containing SRC
+	// if RAM is full, invalidating the srcRaw pointer.
 	srcRaw, err := Lemari.resolve(src)
 	if err != nil {
 		return err
 	}
 
+	tempBuf := make([]byte, size)
+	srcSlice := unsafe.Slice((*byte)(srcRaw), size)
+	copy(tempBuf, srcSlice)
+
+	// 2. Resolve DST
 	dstRaw, err := Lemari.resolve(dst)
 	if err != nil {
 		return err
 	}
 
-	srcSlice := unsafe.Slice((*byte)(srcRaw), size)
+	// 3. Copy from Buffer to DST
 	dstSlice := unsafe.Slice((*byte)(dstRaw), size)
+	copy(dstSlice, tempBuf)
 
-	copy(dstSlice, srcSlice)
 	return nil
 }
 

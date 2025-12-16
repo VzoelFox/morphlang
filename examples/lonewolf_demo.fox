@@ -1,0 +1,50 @@
+# Demo LoneWolf Scaffolding
+# Menggunakan:
+# 1. info_memori() (Sarang)
+# 2. luncurkan() (Serigala Concurrency)
+# 3. saluran_baru() (Komunikasi)
+
+cetak("=== DEMO LONEWOLF NATIVE (SCAFFOLDING) ===")
+
+# 1. Siapkan Saluran Komunikasi
+sinyal = saluran_baru(0)
+STR_SELESAI = "SELESAI"
+STR_DETAK = "DETAK"
+
+# 2. Definisikan Serigala (Monitor di Background)
+fungsi serigala()
+  cetak("[Serigala] Mulai mengawasi sistem...")
+
+  # Loop simulasi pantauan
+  iterasi = 0
+  selama iterasi < 3
+    # Skip info_memori for now to isolate crash
+    cetak("[Serigala] Detak jantung...", iterasi)
+
+    # Kirim detak jantung ke main thread
+    kirim(sinyal, STR_DETAK)
+
+    iterasi = iterasi + 1
+  akhir
+
+  cetak("[Serigala] Selesai bertugas.")
+  kirim(sinyal, STR_SELESAI)
+akhir
+
+# 3. Luncurkan Serigala
+luncurkan(serigala)
+
+# 4. Main Process (Menerima Laporan)
+cetak("[Main] Menunggu laporan...")
+
+status = "JALAN"
+selama status != STR_SELESAI
+  laporan = terima(sinyal)
+  cetak("[Main] Menerima sinyal:", laporan)
+
+  jika laporan == STR_SELESAI
+    status = "SELESAI"
+  akhir
+akhir
+
+cetak("=== DEMO SUKSES ===")
