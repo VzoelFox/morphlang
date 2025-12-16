@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/VzoelFox/morphlang/pkg/analysis"
+	"github.com/VzoelFox/morphlang/pkg/compiler"
 	"github.com/VzoelFox/morphlang/pkg/lexer"
 	"github.com/VzoelFox/morphlang/pkg/parser"
+	"github.com/VzoelFox/morphlang/pkg/vm"
 )
 
 func main() {
@@ -25,6 +27,7 @@ func main() {
 
 	debug := flag.Bool("debug", false, "Enable debug output")
 	check := flag.Bool("check", false, "Check syntax only")
+	useVM := flag.Bool("vm", false, "Run using Bytecode VM")
 	flag.Parse()
 
 	args := flag.Args()
@@ -89,7 +92,33 @@ func main() {
 		}
 	}
 
-	// Analysis & Context Generation
+	if len(p.Errors()) > 0 {
+		fmt.Printf("Parsing failed with %d errors.\n", len(p.Errors()))
+		for _, msg := range p.Errors() {
+			fmt.Println(msg)
+		}
+		os.Exit(1)
+	}
+
+	// VM Execution
+	if *useVM {
+		comp := compiler.New()
+		err := comp.Compile(program)
+		if err != nil {
+			fmt.Printf("Compilation failed:\n%s\n", err)
+			os.Exit(1)
+		}
+
+		machine := vm.New(comp.Bytecode())
+		err = machine.Run()
+		if err != nil {
+			fmt.Printf("Runtime error:\n%s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Analysis & Context Generation (Default)
 	ctx, err := analysis.GenerateContext(program, filename, input, p.Errors())
 	if err != nil {
 		fmt.Printf("Analysis error: %v\n", err)
@@ -112,18 +141,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(p.Errors()) > 0 {
-		if !*check {
-			fmt.Printf("Compilation failed with %d errors.\n", len(p.Errors()))
-			for _, msg := range p.Errors() {
-				fmt.Println(msg)
-			}
-			os.Exit(1)
-		}
-	} else {
-		if !*check {
-			fmt.Printf("Successfully compiled %s\n", filename)
-		}
+	if !*check {
+		fmt.Printf("Successfully compiled %s\n", filename)
 	}
 
 	if *debug {
