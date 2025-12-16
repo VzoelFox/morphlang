@@ -539,6 +539,9 @@ func testLiteralExpression(
 	case int64:
 		return testIntegerLiteral(t, exp, v)
 	case string:
+		if _, ok := exp.(*StringLiteral); ok {
+			return testStringLiteral(t, exp, v)
+		}
 		return testIdentifier(t, exp, v)
 	case bool:
 		return testBooleanLiteral(t, exp, v)
@@ -578,6 +581,19 @@ func testIdentifier(t *testing.T, exp Expression, value string) bool {
 	if ident.TokenLiteral() != value {
 		t.Errorf("ident.TokenLiteral not %s. got=%s", value,
 			ident.TokenLiteral())
+		return false
+	}
+	return true
+}
+
+func testStringLiteral(t *testing.T, exp Expression, value string) bool {
+	sl, ok := exp.(*StringLiteral)
+	if !ok {
+		t.Errorf("exp not *StringLiteral. got=%T", exp)
+		return false
+	}
+	if sl.Value != value {
+		t.Errorf("sl.Value not %q. got=%q", value, sl.Value)
 		return false
 	}
 	return true
@@ -675,6 +691,43 @@ func TestIfExpressionMissingAkhir(t *testing.T) {
 
 	if len(p.Errors()) == 0 {
 		t.Errorf("Expected errors for missing AKHIR but got none")
+	}
+}
+
+func TestParsingStringInfixExpressions(t *testing.T) {
+	tests := []struct {
+		input    string
+		left     interface{}
+		operator string
+		right    interface{}
+	}{
+		{`"a" == "b"`, "a", "==", "b"},
+		{`"a" != "b"`, "a", "!=", "b"},
+		{`x == "a"`, "x", "==", "a"},
+		{`x != "a"`, "x", "!=", "a"},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain %d statements. got=%d",
+				1, len(program.Statements))
+		}
+
+		stmt, ok := program.Statements[0].(*ExpressionStatement)
+		if !ok {
+			t.Fatalf("program.Statements[0] is not ExpressionStatement. got=%T",
+				program.Statements[0])
+		}
+
+		if !testInfixExpression(t, stmt.Expression, tt.left,
+			tt.operator, tt.right) {
+			return
+		}
 	}
 }
 
