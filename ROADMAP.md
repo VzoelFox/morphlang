@@ -341,6 +341,17 @@ morph/
 
 ---
 
+### **PHASE X: Memory Management (Experimental)**
+
+**Goal:** Create a custom memory allocator to replace Go's GC dependency.
+
+- [ ] Define `pkg/memory` structure (Arena, Ptr)
+- [ ] Implement simple allocator (Bump Pointer)
+- [ ] Implement advanced allocator (Free List / Slab)
+- [ ] Integrate with `pkg/object` (Refactor Object to use Ptr)
+
+---
+
 ## **PATCH VERSIONING**
 
 ```
