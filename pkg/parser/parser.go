@@ -264,6 +264,38 @@ func (p *Parser) parseFromImportStatement() *ImportStatement {
 	return stmt
 }
 
+func (p *Parser) parseFromImportStatement() *ImportStatement {
+	stmt := &ImportStatement{Token: p.curToken}
+
+	if !p.expectPeek(lexer.STRING) {
+		return nil
+	}
+	stmt.Path = p.curToken.Literal
+
+	if !p.expectPeek(lexer.AMBIL) {
+		return nil
+	}
+
+	identifiers := []string{}
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	identifiers = append(identifiers, p.curToken.Literal)
+
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		identifiers = append(identifiers, p.curToken.Literal)
+	}
+
+	stmt.Identifiers = identifiers
+
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+}
+
 func (p *Parser) parseReturnStatement() *ReturnStatement {
 	stmt := &ReturnStatement{Token: p.curToken}
 
