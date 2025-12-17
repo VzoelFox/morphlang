@@ -331,6 +331,30 @@ func (rs *ReturnStatement) String() string {
 	return out.String()
 }
 
+type ImportStatement struct {
+	Token       lexer.Token // The 'ambil' or 'dari' token
+	Path        string      // The file path
+	Identifiers []string    // Imported identifiers (if 'dari')
+}
+
+func (is *ImportStatement) statementNode()       {}
+func (is *ImportStatement) TokenLiteral() string { return is.Token.Literal }
+func (is *ImportStatement) String() string {
+	var out bytes.Buffer
+	if len(is.Identifiers) > 0 {
+		out.WriteString("dari \"")
+		out.WriteString(is.Path)
+		out.WriteString("\" ambil ")
+		out.WriteString(strings.Join(is.Identifiers, ", "))
+	} else {
+		out.WriteString("ambil \"")
+		out.WriteString(is.Path)
+		out.WriteString("\"")
+	}
+	out.WriteString(";")
+	return out.String()
+}
+
 type AssignmentStatement struct {
 	Token lexer.Token
 	Name  Expression

@@ -288,6 +288,15 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
+
+		case compiler.OpImport:
+			constIndex := compiler.ReadUint16(ins[ip+1:])
+			vm.currentFrame().ip += 2
+
+			err := vm.executeImport(int(constIndex))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -706,4 +715,49 @@ func nativeBoolToBooleanObject(input bool) *object.Boolean {
 		return True
 	}
 	return False
+}
+
+func (vm *VM) executeImport(constIndex int) error {
+	constant := vm.constants[constIndex]
+	function, ok := constant.(*object.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("import const not function")
+	}
+
+	// Create Closure
+	closure := &object.Closure{Fn: function, FreeVariables: []object.Object{}}
+
+	// Create Module VM
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = NewFrame(closure, 0)
+
+	moduleVM := &VM{
+		constants:   vm.constants,
+		globals:     make([]object.Object, GlobalSize), // Fresh globals for module
+		stack:       [StackSize]object.Object{},
+		sp:          function.NumLocals, // Should be 0 based on fix
+		frames:      frames,
+		framesIndex: 1,
+	}
+
+	// Run
+	err := moduleVM.Run()
+	if err != nil {
+		return err
+	}
+
+	// Harvest Exports
+	exports := make(map[object.HashKey]object.HashPair)
+	for i, name := range function.GlobalNames {
+		if name == "" {
+			continue
+		}
+		val := moduleVM.globals[i]
+		if val != nil {
+			key := &object.String{Value: name}
+			exports[key.HashKey()] = object.HashPair{Key: key, Value: val}
+		}
+	}
+
+	return vm.push(&object.Hash{Pairs: exports})
 }

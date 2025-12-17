@@ -37,6 +37,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.ASTERISK: PRODUCT,
 	lexer.LPAREN:   CALL,
 	lexer.LBRACKET: INDEX,
+	lexer.DOT:      INDEX, // Dot has high precedence
 }
 
 type (
@@ -120,6 +121,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.ATAU, p.parseInfixExpression)
 	p.registerInfix(lexer.LPAREN, p.parseCallExpression)
 	p.registerInfix(lexer.LBRACKET, p.parseIndexExpression)
+	p.registerInfix(lexer.DOT, p.parseDotExpression)
 
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
@@ -195,8 +197,60 @@ func (p *Parser) parseStatement() Statement {
 	switch p.curToken.Type {
 	case lexer.KEMBALIKAN:
 		return p.parseReturnStatement()
+	case lexer.AMBIL:
+		return p.parseImportStatement()
+	case lexer.DARI:
+		return p.parseFromImportStatement()
 	default:
 		return p.parseExpressionOrAssignmentStatement()
+	}
+}
+
+func (p *Parser) parseImportStatement() *ImportStatement {
+	stmt := &ImportStatement{Token: p.curToken}
+
+	if !p.expectPeek(lexer.STRING) {
+		return nil
+	}
+
+	stmt.Path = p.curToken.Literal
+
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseFromImportStatement() *ImportStatement {
+	stmt := &ImportStatement{Token: p.curToken}
+
+	if !p.expectPeek(lexer.STRING) {
+		return nil
+	}
+	stmt.Path = p.curToken.Literal
+
+	if !p.expectPeek(lexer.AMBIL) {
+		return nil
+	}
+
+	identifiers := []string{}
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	identifiers = append(identifiers, p.curToken.Literal)
+
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		identifiers = append(identifiers, p.curToken.Literal)
+	}
+
+	stmt.Identifiers = identifiers
+
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
 	}
 }
 
@@ -651,4 +705,16 @@ func (p *Parser) expectPeek(t lexer.TokenType) bool {
 
 func (p *Parser) noPrefixParseFnError(t lexer.TokenType) {
 	p.addDetailedError(p.curToken, "no prefix parse function for %s found", t)
+}
+
+func (p *Parser) parseDotExpression(left Expression) Expression {
+	token := p.curToken
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+
+	index := &StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+
+	return &IndexExpression{Token: token, Left: left, Index: index}
 }

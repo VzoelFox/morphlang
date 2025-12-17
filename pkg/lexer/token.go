@@ -65,6 +65,8 @@ const (
 	SELAMA     = "SELAMA"
 	DAN        = "DAN"
 	ATAU       = "ATAU"
+	AMBIL      = "AMBIL"
+	DARI       = "DARI"
 )
 
 var keywords = map[string]TokenType{
@@ -80,6 +82,8 @@ var keywords = map[string]TokenType{
 	"selama":     SELAMA,
 	"dan":        DAN,
 	"atau":       ATAU,
+	"ambil":      AMBIL,
+	"dari":       DARI,
 }
 
 // LookupIdent checks if an identifier is a keyword (case-insensitive)
