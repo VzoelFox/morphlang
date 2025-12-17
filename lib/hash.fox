@@ -1,0 +1,58 @@
+# lib/hash.fox
+# Implementasi Algoritma Hash menggunakan Morph Bitwise Operators
+
+# Konstanta FNV-1a 32-bit
+FNV_OFFSET_32 = 2166136261
+FNV_PRIME_32 = 16777619
+
+# Fungsi menghitung hash FNV-1a dari string
+# Input: data (string)
+# Output: integer (hash 32-bit)
+fungsi fnv1a_32(data)
+  hash = FNV_OFFSET_32
+  len = panjang(data)
+
+  i = 0
+  selama i < len
+    # Ambil byte ke-i (string indexing -> byte integer)
+    byte_val = data[i]
+
+    # XOR
+    hash = hash ^ byte_val
+
+    # Multiply by Prime
+    hash = hash * FNV_PRIME_32
+
+    # Force 32-bit overflow behavior
+    # Mask: 0xFFFFFFFF = 4294967295
+    hash = hash & 4294967295
+
+    i = i + 1
+  akhir
+
+  kembalikan hash
+akhir
+
+# Adler-32 Checksum
+# Input: data (string)
+# Output: integer
+fungsi adler32(data)
+  MOD_ADLER = 65521
+  a = 1
+  b = 0
+  len = panjang(data)
+
+  i = 0
+  selama i < len
+    char_code = data[i]
+
+    # Menggunakan operator Modulo (%) asli
+    a = (a + char_code) % MOD_ADLER
+    b = (b + a) % MOD_ADLER
+
+    i = i + 1
+  akhir
+
+  # return (b << 16) | a
+  kembalikan (b << 16) | a
+akhir

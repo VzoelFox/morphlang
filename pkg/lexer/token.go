@@ -28,6 +28,7 @@ const (
 	BANG     = "!"
 	ASTERISK = "*"
 	SLASH    = "/"
+	PERCENT  = "%"
 
 	LT     = "<"
 	GT     = ">"
@@ -35,6 +36,14 @@ const (
 	NOT_EQ = "!="
 	LTE    = "<="
 	GTE    = ">="
+
+	// Bitwise Operators
+	AND    = "&"
+	OR     = "|"
+	XOR    = "^"
+	TILDE  = "~" // Bitwise NOT
+	LSHIFT = "<<"
+	RSHIFT = ">>"
 
 	// Delimiters
 	COMMA     = ","

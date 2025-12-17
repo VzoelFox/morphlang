@@ -352,6 +352,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpMul)
 		case "/":
 			c.emit(OpDiv)
+		case "%":
+			c.emit(OpMod)
 		case ">":
 			c.emit(OpGreaterThan)
 		case ">=":
@@ -360,6 +362,16 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpEqual)
 		case "!=":
 			c.emit(OpNotEqual)
+		case "&":
+			c.emit(OpAnd)
+		case "|":
+			c.emit(OpOr)
+		case "^":
+			c.emit(OpXor)
+		case "<<":
+			c.emit(OpLShift)
+		case ">>":
+			c.emit(OpRShift)
 		default:
 			return fmt.Errorf("unknown operator %s", node.Operator)
 		}
@@ -375,6 +387,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpBang)
 		case "-":
 			c.emit(OpMinus)
+		case "~":
+			c.emit(OpBitNot)
 		default:
 			return fmt.Errorf("unknown operator %s", node.Operator)
 		}

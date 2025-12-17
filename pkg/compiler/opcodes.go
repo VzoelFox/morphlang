@@ -28,12 +28,21 @@ const (
 	OpSub Opcode = 0x21
 	OpMul Opcode = 0x22
 	OpDiv Opcode = 0x23
+	OpMod Opcode = 0x32 // Modulo
 	OpEqual    Opcode = 0x24
 	OpNotEqual Opcode = 0x25
 	OpGreaterThan Opcode = 0x26
 	OpGreaterEqual Opcode = 0x27
 	OpMinus Opcode = 0x2F // Unary minus
 	OpBang  Opcode = 0x2E // Unary not
+
+	// Bitwise
+	OpAnd     Opcode = 0x28
+	OpOr      Opcode = 0x29
+	OpXor     Opcode = 0x2A
+	OpLShift  Opcode = 0x2B
+	OpRShift  Opcode = 0x2C
+	OpBitNot  Opcode = 0x2D // Unary bitwise not
 
 	// Control Flow
 	OpJump        Opcode = 0x30
@@ -69,12 +78,19 @@ var definitions = map[Opcode]*Definition{
 	OpSub:         {"OpSub", []int{}},
 	OpMul:         {"OpMul", []int{}},
 	OpDiv:         {"OpDiv", []int{}},
+	OpMod:         {"OpMod", []int{}},
 	OpEqual:       {"OpEqual", []int{}},
 	OpNotEqual:    {"OpNotEqual", []int{}},
 	OpGreaterThan: {"OpGreaterThan", []int{}},
 	OpGreaterEqual: {"OpGreaterEqual", []int{}},
 	OpMinus:       {"OpMinus", []int{}},
 	OpBang:        {"OpBang", []int{}},
+	OpAnd:         {"OpAnd", []int{}},
+	OpOr:          {"OpOr", []int{}},
+	OpXor:         {"OpXor", []int{}},
+	OpLShift:      {"OpLShift", []int{}},
+	OpRShift:      {"OpRShift", []int{}},
+	OpBitNot:      {"OpBitNot", []int{}},
 	OpJump:        {"OpJump", []int{2}}, // u16 offset
 	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}}, // u16 offset
 	OpCall:        {"OpCall", []int{1}}, // u8 numArgs

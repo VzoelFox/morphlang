@@ -15,9 +15,13 @@ const (
 	AND         // dan
 	EQUALS      // ==
 	LESSGREATER // > or <
+	BITOR       // |
+	BITXOR      // ^
+	BITAND      // &
+	SHIFT       // << or >>
 	SUM         // +
 	PRODUCT     // *
-	PREFIX      // -X or !X
+	PREFIX      // -X or !X or ~X
 	CALL        // myFunction(X)
 	INDEX       // array[index]
 )
@@ -25,16 +29,22 @@ const (
 var precedences = map[lexer.TokenType]int{
 	lexer.ATAU:     OR,
 	lexer.DAN:      AND,
+	lexer.OR:       BITOR,
+	lexer.XOR:      BITXOR,
+	lexer.AND:      BITAND,
 	lexer.EQ:       EQUALS,
 	lexer.NOT_EQ:   EQUALS,
 	lexer.LT:       LESSGREATER,
 	lexer.GT:       LESSGREATER,
 	lexer.LTE:      LESSGREATER,
 	lexer.GTE:      LESSGREATER,
+	lexer.LSHIFT:   SHIFT,
+	lexer.RSHIFT:   SHIFT,
 	lexer.PLUS:     SUM,
 	lexer.MINUS:    SUM,
 	lexer.SLASH:    PRODUCT,
 	lexer.ASTERISK: PRODUCT,
+	lexer.PERCENT:  PRODUCT,
 	lexer.LPAREN:   CALL,
 	lexer.LBRACKET: INDEX,
 	lexer.DOT:      INDEX, // Dot has high precedence
@@ -100,6 +110,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.KOSONG, p.parseNull)
 	p.registerPrefix(lexer.BANG, p.parsePrefixExpression)
 	p.registerPrefix(lexer.MINUS, p.parsePrefixExpression)
+	p.registerPrefix(lexer.TILDE, p.parsePrefixExpression)
 	p.registerPrefix(lexer.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(lexer.JIKA, p.parseIfExpression)
 	p.registerPrefix(lexer.SELAMA, p.parseWhileExpression)
@@ -112,12 +123,18 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.MINUS, p.parseInfixExpression)
 	p.registerInfix(lexer.SLASH, p.parseInfixExpression)
 	p.registerInfix(lexer.ASTERISK, p.parseInfixExpression)
+	p.registerInfix(lexer.PERCENT, p.parseInfixExpression)
 	p.registerInfix(lexer.EQ, p.parseInfixExpression)
 	p.registerInfix(lexer.NOT_EQ, p.parseInfixExpression)
 	p.registerInfix(lexer.LT, p.parseInfixExpression)
 	p.registerInfix(lexer.GT, p.parseInfixExpression)
 	p.registerInfix(lexer.LTE, p.parseInfixExpression)
 	p.registerInfix(lexer.GTE, p.parseInfixExpression)
+	p.registerInfix(lexer.AND, p.parseInfixExpression)
+	p.registerInfix(lexer.OR, p.parseInfixExpression)
+	p.registerInfix(lexer.XOR, p.parseInfixExpression)
+	p.registerInfix(lexer.LSHIFT, p.parseInfixExpression)
+	p.registerInfix(lexer.RSHIFT, p.parseInfixExpression)
 	p.registerInfix(lexer.DAN, p.parseInfixExpression)
 	p.registerInfix(lexer.ATAU, p.parseInfixExpression)
 	p.registerInfix(lexer.LPAREN, p.parseCallExpression)
@@ -559,9 +576,10 @@ func (p *Parser) parseInfixExpression(left Expression) Expression {
 
 func isBinaryOp(t lexer.TokenType) bool {
 	switch t {
-	case lexer.PLUS, lexer.MINUS, lexer.SLASH, lexer.ASTERISK,
+	case lexer.PLUS, lexer.MINUS, lexer.SLASH, lexer.ASTERISK, lexer.PERCENT,
 		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE,
-		lexer.DAN, lexer.ATAU:
+		lexer.DAN, lexer.ATAU,
+		lexer.AND, lexer.OR, lexer.XOR, lexer.LSHIFT, lexer.RSHIFT:
 		return true
 	}
 	return false

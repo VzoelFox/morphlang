@@ -139,12 +139,27 @@ func (l *Lexer) readCodeToken() Token {
 		tok = newToken(SLASH, l.ch)
 	case '*':
 		tok = newToken(ASTERISK, l.ch)
+	case '%':
+		tok = newToken(PERCENT, l.ch)
+	case '&':
+		tok = newToken(AND, l.ch)
+	case '|':
+		tok = newToken(OR, l.ch)
+	case '^':
+		tok = newToken(XOR, l.ch)
+	case '~':
+		tok = newToken(TILDE, l.ch)
 	case '<':
 		if l.peekChar() == '=' {
 			ch := l.ch
 			l.readChar()
 			literal := string(ch) + string(l.ch)
 			tok = Token{Type: LTE, Literal: literal}
+		} else if l.peekChar() == '<' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: LSHIFT, Literal: literal}
 		} else {
 			tok = newToken(LT, l.ch)
 		}
@@ -154,6 +169,11 @@ func (l *Lexer) readCodeToken() Token {
 			l.readChar()
 			literal := string(ch) + string(l.ch)
 			tok = Token{Type: GTE, Literal: literal}
+		} else if l.peekChar() == '>' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: RSHIFT, Literal: literal}
 		} else {
 			tok = newToken(GT, l.ch)
 		}

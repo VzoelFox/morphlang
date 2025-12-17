@@ -1,0 +1,40 @@
+ambil "lib/io.fox"
+
+cetak("Testing Async I/O...")
+
+file_path = "io_async.txt"
+konten_awal = "Hello Morph Async I/O"
+
+# 1. Test Tulis Async
+cetak("[1] Menulis file secara async...")
+ch_tulis = io.tulis_async(file_path, konten_awal)
+
+# Lakukan hal lain sambil menunggu (simulasi)
+cetak("... (Main thread mengerjakan tugas lain) ...")
+
+hasil_tulis = terima(ch_tulis)
+
+jika adalah_galat(hasil_tulis)
+  cetak("❌ Gagal menulis file: " + pesan_galat(hasil_tulis))
+lainnya
+  cetak("✅ Sukses menulis file.")
+akhir
+
+# 2. Test Baca Async
+cetak("[2] Membaca file secara async...")
+ch_baca = io.baca_async(file_path)
+
+cetak("... (Main thread menunggu data) ...")
+
+hasil_baca = terima(ch_baca)
+
+jika adalah_galat(hasil_baca)
+  cetak("❌ Gagal membaca file: " + pesan_galat(hasil_baca))
+atau_jika hasil_baca == konten_awal
+  cetak("✅ Sukses membaca file. Konten cocok.")
+  cetak("   Konten: " + hasil_baca)
+lainnya
+  cetak("❌ Konten tidak cocok!")
+  cetak("   Expected: " + konten_awal)
+  cetak("   Got: " + hasil_baca)
+akhir
