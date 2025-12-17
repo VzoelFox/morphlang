@@ -444,7 +444,9 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 		// 3. Emit Import and Binding
-		c.emit(OpImport, modIdx) // Pushes Module Hash
+		// c.emit(OpImport, modIdx)
+		c.emit(OpLoadConst, modIdx)
+		c.emit(OpCall, 0) // Pushes Module Hash (Return Value of Wrapper)
 
 		if len(node.Identifiers) == 0 {
 			// "ambil 'path'" -> bind whole module to name
@@ -656,8 +658,45 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		return 0, fmt.Errorf("import parse error in %s: %v", path, p.Errors())
 	}
 
+	// AST Transformation: Wrap in Function and Return Exports
+	exports := make(map[parser.Expression]parser.Expression)
+	dummyToken := lexer.Token{Type: lexer.STRING, Literal: "dummy"}
+
+	for _, stmt := range prog.Statements {
+		if assign, ok := stmt.(*parser.AssignmentStatement); ok {
+			if ident, ok := assign.Name.(*parser.Identifier); ok {
+				name := ident.Value
+				key := &parser.StringLiteral{Token: dummyToken, Value: name}
+				val := &parser.Identifier{Token: dummyToken, Value: name}
+				exports[key] = val
+			}
+		}
+		if exprStmt, ok := stmt.(*parser.ExpressionStatement); ok {
+			if fn, ok := exprStmt.Expression.(*parser.FunctionLiteral); ok {
+				if fn.Name != "" {
+					name := fn.Name
+					key := &parser.StringLiteral{Token: dummyToken, Value: name}
+					val := &parser.Identifier{Token: dummyToken, Value: name}
+					exports[key] = val
+				}
+			}
+		}
+	}
+
+	retStmt := &parser.ReturnStatement{
+		Token:       lexer.Token{Type: lexer.KEMBALIKAN, Literal: "kembalikan"},
+		ReturnValue: &parser.HashLiteral{Token: lexer.Token{Type: lexer.LBRACE, Literal: "{"}, Pairs: exports},
+	}
+	prog.Statements = append(prog.Statements, retStmt)
+
+	wrapperFn := &parser.FunctionLiteral{
+		Token: lexer.Token{Type: lexer.FUNGSI, Literal: "fungsi"},
+		Body:  &parser.BlockStatement{Statements: prog.Statements},
+	}
+
+	// Compile Wrapper
 	subComp := New()
-	err = subComp.Compile(prog)
+	err = subComp.Compile(wrapperFn)
 	if err != nil {
 		return 0, fmt.Errorf("import compile error in %s: %v", path, err)
 	}
@@ -687,29 +726,30 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		}
 	}
 
-	// Create Module Function (Top Level)
-	remappedIns := make(Instructions, len(bc.Instructions))
-	copy(remappedIns, bc.Instructions)
-	c.remapInstructions(remappedIns, indexMap)
+	// Create Module Function (It is the wrapper compiled function)
+	// subComp.Compile(wrapperFn) leaves the wrapper function object on stack?
+	// No, Compile(Node) emits instructions.
+	// Compile(FunctionLiteral) emits instructions to Create Closure.
+	// But we want the CompiledFunction itself as a constant.
+	// Wait. `Compile(FunctionLiteral)` emits `OpClosure`.
+	// The `CompiledFunction` is added to constants.
+	// `bc.Instructions` contains `OpClosure ... OpPop`. (If expression statement).
+	// We want the *CompiledFunction object* corresponding to `wrapperFn`.
+	// It is the LAST constant added to `subComp`?
+	// `subComp.constants` contains it.
+	// `subComp` compiled ONE expression (FunctionLiteral).
+	// So `bc.Instructions` is `OpClosure <constIdx> 0`.
+	// We want that `constIdx`.
 
-	modFn := &object.CompiledFunction{
-		Instructions:  remappedIns,
-		NumLocals:     0,
-		NumParameters: 0,
+	// We need to parse instructions to find the `OpClosure`.
+	// It should be the first instruction.
+	if len(bc.Instructions) < 3 || Opcode(bc.Instructions[0]) != OpClosure {
+		return 0, fmt.Errorf("import wrapper compilation failed struct")
 	}
 
-	// Populate GlobalNames for Module Export
-	globalNames := make([]string, subComp.symbolTable.numDefinitions)
-	for name, sym := range subComp.symbolTable.store {
-		if sym.Scope == GlobalScope {
-			if sym.Index < len(globalNames) {
-				globalNames[sym.Index] = name
-			}
-		}
-	}
-	modFn.GlobalNames = globalNames
-
-	return c.addConstant(modFn), nil
+	wrapperConstIdx := int(ReadUint16(bc.Instructions[1:]))
+	// Return the remapped index of this constant
+	return indexMap[wrapperConstIdx], nil
 }
 
 func (c *Compiler) remapInstructions(ins []byte, indexMap map[int]int) {

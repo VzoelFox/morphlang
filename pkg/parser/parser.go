@@ -140,6 +140,14 @@ func (p *Parser) Errors() []ParserError {
 }
 
 func (p *Parser) addDetailedError(tok lexer.Token, format string, args ...interface{}) {
+	// De-duplicate errors at same location
+	if len(p.errors) > 0 {
+		lastErr := p.errors[len(p.errors)-1]
+		if lastErr.Line == tok.Line && lastErr.Column == tok.Column {
+			return
+		}
+	}
+
 	msg := fmt.Sprintf(format, args...)
 	lineContent := p.getLineContent(tok.Line)
 

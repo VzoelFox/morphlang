@@ -289,14 +289,6 @@ func (vm *VM) Run() error {
 				return err
 			}
 
-		case compiler.OpImport:
-			constIndex := compiler.ReadUint16(ins[ip+1:])
-			vm.currentFrame().ip += 2
-
-			err := vm.executeImport(int(constIndex))
-			if err != nil {
-				return err
-			}
 		}
 	}
 
