@@ -1,0 +1,27 @@
+ambil "lib/hash.fox"
+
+cetak("Testing Hash Functions...")
+
+# Test Case 1: FNV-1a "morph"
+# Expected: 1416239749 (Verified via Python script)
+input1 = "morph"
+hasil1 = hash.fnv1a_32(input1)
+cetak("FNV-1a('morph'): " + hasil1)
+
+jika hasil1 == 1416239749
+  cetak("✅ PASS: 'morph'")
+lainnya
+  cetak("❌ FAIL: 'morph'. Expected 1416239749, Got " + hasil1)
+akhir
+
+# Test Case 2: Adler-32 "Wikipedia"
+# Expected: 300286872
+input2 = "Wikipedia"
+hasil2 = hash.adler32(input2)
+cetak("Adler-32('Wikipedia'): " + hasil2)
+
+jika hasil2 == 300286872
+  cetak("✅ PASS: Adler-32 'Wikipedia'")
+lainnya
+  cetak("❌ FAIL: Adler-32 'Wikipedia'. Expected 300286872, Got " + hasil2)
+akhir

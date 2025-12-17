@@ -1,0 +1,47 @@
+# lib/io.fox
+# Library I/O Asinkron untuk Morph
+# Menggunakan pola Concurrency (Channel & Routine)
+
+# Membaca file secara asinkron
+# Input: path (string)
+# Output: saluran (channel) yang akan menerima isi file (string) atau error
+fungsi baca_async(path)
+  ch = saluran_baru(1) # Buffered channel size 1
+
+  luncurkan(fungsi()
+    hasil = baca_file(path)
+    kirim(ch, hasil)
+  akhir)
+
+  kembalikan ch
+akhir
+
+# Menulis file secara asinkron
+# Input: path (string), konten (string)
+# Output: saluran (channel) yang akan menerima null (sukses) atau error
+fungsi tulis_async(path, konten)
+  ch = saluran_baru(1)
+
+  luncurkan(fungsi()
+    hasil = tulis_file(path, konten)
+    kirim(ch, hasil)
+  akhir)
+
+  kembalikan ch
+akhir
+
+# Helper untuk membaca input user dengan timeout (simulasi)
+# Input: prompt (string), timeout_ms (int)
+# Output: string input atau null (timeout)
+# Catatan: 'input' sendiri blocking di level OS thread (tergantung implementasi Go),
+# tapi di Go runtime ini aman.
+fungsi input_async(prompt)
+  ch = saluran_baru(1)
+
+  luncurkan(fungsi()
+    hasil = input(prompt)
+    kirim(ch, hasil)
+  akhir)
+
+  kembalikan ch
+akhir

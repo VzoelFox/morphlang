@@ -36,6 +36,14 @@ const (
 	LTE    = "<="
 	GTE    = ">="
 
+	// Bitwise Operators
+	AND    = "&"
+	OR     = "|"
+	XOR    = "^"
+	TILDE  = "~" // Bitwise NOT
+	LSHIFT = "<<"
+	RSHIFT = ">>"
+
 	// Delimiters
 	COMMA     = ","
 	SEMICOLON = ";"
