@@ -100,6 +100,13 @@ Untuk menjalankan seluruh test suite (Lexer, Parser, Object, Analysis):
 go test ./...
 ```
 
+## COTC (Standard Library)
+
+Morph menyertakan **COTC (Core of The Core)**, pustaka standar yang ditulis dalam Morph.
+Gunakan perintah `ambil "cotc/nama_modul"` untuk menggunakannya.
+
+Lihat [Dokumentasi COTC](docs/cotc.md) untuk detail modul yang tersedia.
+
 ## Contoh Kode
 
 ```ruby

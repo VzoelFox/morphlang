@@ -639,6 +639,11 @@ func (c *Compiler) changeOperand(opPos int, operand int) {
 }
 
 func (c *Compiler) loadModule(path string) (int, error) {
+	// COTC Mapping: cotc/xxx -> lib/cotc/xxx
+	if strings.HasPrefix(path, "cotc/") {
+		path = "lib/" + path
+	}
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return 0, fmt.Errorf("import error: %v", err)

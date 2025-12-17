@@ -318,7 +318,9 @@ morph/
 
 ---
 
-### **PHASE 6: Standard Library (Week 17-20)**
+### **PHASE 6: COTC (Core of The Core) - Standard Library**
+
+**Concept:** COTC is the foundational library written in Morph (`.fox`), serving as the "Standard Library" for the language.
 
 **Patch 6.1: I/O Module**
 - [x] `baca_file(path)` - read file
