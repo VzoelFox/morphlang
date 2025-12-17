@@ -331,6 +331,22 @@ func (rs *ReturnStatement) String() string {
 	return out.String()
 }
 
+type BreakStatement struct {
+	Token lexer.Token
+}
+
+func (bs *BreakStatement) statementNode()       {}
+func (bs *BreakStatement) TokenLiteral() string { return bs.Token.Literal }
+func (bs *BreakStatement) String() string       { return bs.Token.Literal + ";" }
+
+type ContinueStatement struct {
+	Token lexer.Token
+}
+
+func (cs *ContinueStatement) statementNode()       {}
+func (cs *ContinueStatement) TokenLiteral() string { return cs.Token.Literal }
+func (cs *ContinueStatement) String() string       { return cs.Token.Literal + ";" }
+
 type ImportStatement struct {
 	Token       lexer.Token // The 'ambil' or 'dari' token
 	Path        string      // The file path

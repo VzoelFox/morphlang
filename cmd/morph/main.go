@@ -92,6 +92,31 @@ func main() {
 		}
 	}
 
+	// Analysis & Context Generation (Always generate context first)
+	ctx, err := analysis.GenerateContext(program, filename, input, p.Errors())
+	if err != nil {
+		fmt.Printf("Analysis error: %v\n", err)
+	} else {
+		// Write .fox.vz
+		outPath := filename + ".vz"
+		file, err := os.Create(outPath)
+		if err != nil {
+			fmt.Printf("Error creating context file: %v\n", err)
+		} else {
+			enc := json.NewEncoder(file)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(ctx); err != nil {
+				fmt.Printf("Error writing context: %v\n", err)
+			}
+			file.Close()
+
+			if *debug {
+				fmt.Printf("\n--- Context File ---\n")
+				fmt.Printf("Generated: %s\n", outPath)
+			}
+		}
+	}
+
 	if len(p.Errors()) > 0 {
 		fmt.Printf("Parsing failed with %d errors.\n", len(p.Errors()))
 		for _, msg := range p.Errors() {
@@ -118,35 +143,15 @@ func main() {
 		return
 	}
 
-	// Analysis & Context Generation (Default)
-	ctx, err := analysis.GenerateContext(program, filename, input, p.Errors())
+	// Compilation Check (Ensure logic validity)
+	comp := compiler.New()
+	err = comp.Compile(program)
 	if err != nil {
-		fmt.Printf("Analysis error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Write .fox.vz
-	outPath := filename + ".vz"
-	file, err := os.Create(outPath)
-	if err != nil {
-		fmt.Printf("Error creating context file: %v\n", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(ctx); err != nil {
-		fmt.Printf("Error writing context: %v\n", err)
+		fmt.Printf("Compilation failed:\n%s\n", err)
 		os.Exit(1)
 	}
 
 	if !*check {
 		fmt.Printf("Successfully compiled %s\n", filename)
-	}
-
-	if *debug {
-		fmt.Printf("\n--- Context File ---\n")
-		fmt.Printf("Generated: %s\n", outPath)
 	}
 }
