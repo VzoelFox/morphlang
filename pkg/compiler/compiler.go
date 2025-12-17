@@ -1,9 +1,14 @@
 package compiler
 
 import (
+	"encoding/binary"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 
+	"github.com/VzoelFox/morphlang/pkg/lexer"
 	"github.com/VzoelFox/morphlang/pkg/object"
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
@@ -91,20 +96,44 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 	case *parser.AssignmentStatement:
-		err := c.Compile(node.Value)
-		if err != nil {
-			return err
-		}
+		switch name := node.Name.(type) {
+		case *parser.Identifier:
+			err := c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
 
-		symbol, ok := c.symbolTable.Resolve(node.Name.Value)
-		if !ok {
-			symbol = c.symbolTable.Define(node.Name.Value)
-		}
+			symbol, ok := c.symbolTable.Resolve(name.Value)
+			if !ok {
+				symbol = c.symbolTable.Define(name.Value)
+			}
 
-		if symbol.Scope == GlobalScope {
-			c.emit(OpStoreGlobal, symbol.Index)
-		} else {
-			c.emit(OpStoreLocal, symbol.Index)
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+
+		case *parser.IndexExpression:
+			err := c.Compile(name.Left)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(name.Index)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpSetIndex)
+
+		default:
+			return fmt.Errorf("assignment to %T not supported", node.Name)
 		}
 
 	case *parser.Identifier:
@@ -142,6 +171,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 		if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
 			c.removeLastPop()
+		} else {
+			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
 		}
 
 		// Jump over alternative if consequence was executed
@@ -161,6 +192,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 			if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
 				c.removeLastPop()
+			} else {
+				c.emit(OpLoadConst, c.addConstant(&object.Null{}))
 			}
 		}
 
@@ -215,6 +248,65 @@ func (c *Compiler) Compile(node parser.Node) error {
 				return err
 			}
 			c.emit(OpGreaterThan)
+			return nil
+		}
+
+		if node.Operator == "<=" {
+			err := c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+			err = c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+			c.emit(OpGreaterEqual)
+			return nil
+		}
+
+		if node.Token.Type == lexer.DAN {
+			err := c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpDup)
+			jumpPos := c.emit(OpJumpNotTruthy, 9999)
+
+			c.emit(OpPop)
+
+			err = c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+
+			afterRightPos := len(c.currentInstructions())
+			c.changeOperand(jumpPos, afterRightPos)
+			return nil
+		}
+
+		if node.Token.Type == lexer.ATAU {
+			err := c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpDup)
+			jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
+			jumpPos := c.emit(OpJump, 9999)
+
+			afterLeftPos := len(c.currentInstructions())
+			c.changeOperand(jumpNotTruthyPos, afterLeftPos)
+
+			c.emit(OpPop)
+
+			err = c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+
+			afterRightPos := len(c.currentInstructions())
+			c.changeOperand(jumpPos, afterRightPos)
 			return nil
 		}
 
@@ -276,6 +368,24 @@ func (c *Compiler) Compile(node parser.Node) error {
 		str := &object.String{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(str))
 
+	case *parser.InterpolatedString:
+		if len(node.Parts) == 0 {
+			c.emit(OpLoadConst, c.addConstant(&object.String{Value: ""}))
+		} else {
+			err := c.Compile(node.Parts[0])
+			if err != nil {
+				return err
+			}
+
+			for i := 1; i < len(node.Parts); i++ {
+				err := c.Compile(node.Parts[i])
+				if err != nil {
+					return err
+				}
+				c.emit(OpAdd)
+			}
+		}
+
 	case *parser.ArrayLiteral:
 		for _, el := range node.Elements {
 			err := c.Compile(el)
@@ -316,6 +426,50 @@ func (c *Compiler) Compile(node parser.Node) error {
 			return err
 		}
 		c.emit(OpIndex)
+
+	case *parser.ImportStatement:
+		// 1. Resolve Path and Name
+		path := node.Path
+		if !strings.HasSuffix(path, ".fox") {
+			path += ".fox"
+		}
+		base := filepath.Base(path)
+		ext := filepath.Ext(base)
+		moduleName := base[0 : len(base)-len(ext)]
+
+		// 2. Load and Compile Module
+		modIdx, err := c.loadModule(path)
+		if err != nil {
+			return err
+		}
+
+		// 3. Emit Import and Binding
+		c.emit(OpImport, modIdx) // Pushes Module Hash
+
+		if len(node.Identifiers) == 0 {
+			// "ambil 'path'" -> bind whole module to name
+			symbol := c.symbolTable.Define(moduleName)
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+		} else {
+			// "dari 'path' ambil x, y"
+			for _, ident := range node.Identifiers {
+				c.emit(OpDup) // Keep Hash on stack
+				c.emit(OpLoadConst, c.addConstant(&object.String{Value: ident}))
+				c.emit(OpIndex) // Pops DupHash, Key. Pushes Value.
+
+				symbol := c.symbolTable.Define(ident)
+				if symbol.Scope == GlobalScope {
+					c.emit(OpStoreGlobal, symbol.Index)
+				} else {
+					c.emit(OpStoreLocal, symbol.Index)
+				}
+			}
+			c.emit(OpPop) // Pop the original Module Hash
+		}
 
 	case *parser.FunctionLiteral:
 		c.EnterScope()
@@ -482,4 +636,96 @@ func (c *Compiler) changeOperand(opPos int, operand int) {
 	newInstruction := Make(op, operand)
 
 	c.replaceInstruction(opPos, newInstruction)
+}
+
+func (c *Compiler) loadModule(path string) (int, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("import error: %v", err)
+	}
+
+	l := lexer.New(string(content))
+	p := parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		return 0, fmt.Errorf("import parse error in %s: %v", path, p.Errors())
+	}
+
+	subComp := New()
+	err = subComp.Compile(prog)
+	if err != nil {
+		return 0, fmt.Errorf("import compile error in %s: %v", path, err)
+	}
+
+	bc := subComp.Bytecode()
+
+	// Merge Constants and Remap
+	indexMap := make(map[int]int)
+	for i, constant := range bc.Constants {
+		indexMap[i] = c.addConstant(constant)
+	}
+
+	// Remap Nested Functions in Constants
+	for oldIdx, constant := range bc.Constants {
+		if fn, ok := constant.(*object.CompiledFunction); ok {
+			newIdx := indexMap[oldIdx]
+
+			newFn := &object.CompiledFunction{
+				NumLocals:     fn.NumLocals,
+				NumParameters: fn.NumParameters,
+				Instructions:  make([]byte, len(fn.Instructions)),
+			}
+			copy(newFn.Instructions, fn.Instructions)
+
+			c.remapInstructions(newFn.Instructions, indexMap)
+			c.constants[newIdx] = newFn
+		}
+	}
+
+	// Create Module Function (Top Level)
+	remappedIns := make(Instructions, len(bc.Instructions))
+	copy(remappedIns, bc.Instructions)
+	c.remapInstructions(remappedIns, indexMap)
+
+	modFn := &object.CompiledFunction{
+		Instructions:  remappedIns,
+		NumLocals:     0,
+		NumParameters: 0,
+	}
+
+	// Populate GlobalNames for Module Export
+	globalNames := make([]string, subComp.symbolTable.numDefinitions)
+	for name, sym := range subComp.symbolTable.store {
+		if sym.Scope == GlobalScope {
+			if sym.Index < len(globalNames) {
+				globalNames[sym.Index] = name
+			}
+		}
+	}
+	modFn.GlobalNames = globalNames
+
+	return c.addConstant(modFn), nil
+}
+
+func (c *Compiler) remapInstructions(ins []byte, indexMap map[int]int) {
+	offset := 0
+	for offset < len(ins) {
+		op := Opcode(ins[offset])
+		def, err := Lookup(byte(op))
+		if err != nil {
+			// Should not happen if compiled correctly
+			return
+		}
+
+		if op == OpLoadConst || op == OpClosure {
+			oldIdx := int(ReadUint16(ins[offset+1:]))
+			newIdx := indexMap[oldIdx]
+			binary.BigEndian.PutUint16(ins[offset+1:], uint16(newIdx))
+		}
+
+		offset += 1
+		for _, w := range def.OperandWidths {
+			offset += w
+		}
+	}
 }

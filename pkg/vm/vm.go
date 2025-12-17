@@ -117,6 +117,16 @@ func (vm *VM) Run() error {
 		case compiler.OpPop:
 			vm.pop()
 
+		case compiler.OpDup:
+			top := vm.StackTop()
+			if top == nil {
+				return fmt.Errorf("stack underflow on dup")
+			}
+			err := vm.push(top)
+			if err != nil {
+				return err
+			}
+
 		case compiler.OpJump:
 			pos := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip = pos - 1
@@ -204,6 +214,16 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+		case compiler.OpSetIndex:
+			val := vm.pop()
+			index := vm.pop()
+			left := vm.pop()
+
+			err := vm.executeSetIndexExpression(left, index, val)
+			if err != nil {
+				return err
+			}
+
 		case compiler.OpCall:
 			numArgs := int(ins[ip+1])
 			vm.currentFrame().ip += 1
@@ -265,6 +285,15 @@ func (vm *VM) Run() error {
 
 			currentClosure := vm.currentFrame().cl
 			err := vm.push(currentClosure.FreeVariables[freeIndex])
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpImport:
+			constIndex := compiler.ReadUint16(ins[ip+1:])
+			vm.currentFrame().ip += 2
+
+			err := vm.executeImport(int(constIndex))
 			if err != nil {
 				return err
 			}
@@ -349,15 +378,17 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 		return nil, fmt.Errorf("luncurkan function must accept 0 arguments")
 	}
 
-	// Create new VM sharing state (Scaffolding: Shared Globals)
-	// Warning: Global variables are shared but not thread-safe.
-	// Use Channels for safe communication.
+	// Create new VM with ISOLATED globals (Copy-on-Spawn)
+	// This ensures that variable modifications in the thread do not affect the parent.
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = NewFrame(cl, 0)
 
+	newGlobals := make([]object.Object, len(vm.globals))
+	copy(newGlobals, vm.globals)
+
 	newVM := &VM{
 		constants:   vm.constants,
-		globals:     vm.globals,
+		globals:     newGlobals,
 		stack:       [StackSize]object.Object{},
 		sp:          cl.Fn.NumLocals, // Reserve space for locals on the stack
 		frames:      frames,
@@ -421,11 +452,30 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		return vm.executeBinaryIntegerOperation(op, left, right)
 	}
 
-	if leftType == object.STRING_OBJ && rightType == object.STRING_OBJ {
+	if leftType == object.STRING_OBJ {
 		return vm.executeBinaryStringOperation(op, left, right)
 	}
 
+	if leftType == object.ARRAY_OBJ && rightType == object.ARRAY_OBJ {
+		return vm.executeBinaryArrayOperation(op, left, right)
+	}
+
 	return vm.push(&object.Error{Message: fmt.Sprintf("unsupported types for binary operation: %s %s", leftType, rightType)})
+}
+
+func (vm *VM) executeBinaryArrayOperation(op compiler.Opcode, left, right object.Object) error {
+	if op != compiler.OpAdd {
+		return vm.push(&object.Error{Message: fmt.Sprintf("unknown array operator: %d", op)})
+	}
+
+	leftVal := left.(*object.Array).Elements
+	rightVal := right.(*object.Array).Elements
+
+	newElements := make([]object.Object, len(leftVal)+len(rightVal))
+	copy(newElements, leftVal)
+	copy(newElements[len(leftVal):], rightVal)
+
+	return vm.push(&object.Array{Elements: newElements})
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right object.Object) error {
@@ -459,7 +509,13 @@ func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right objec
 	}
 
 	leftVal := left.(*object.String).Value
-	rightVal := right.(*object.String).Value
+	var rightVal string
+
+	if rightStr, ok := right.(*object.String); ok {
+		rightVal = rightStr.Value
+	} else {
+		rightVal = right.Inspect()
+	}
 
 	return vm.push(&object.String{Value: leftVal + rightVal})
 }
@@ -579,6 +635,42 @@ func (vm *VM) executeIndexExpression(left, index object.Object) error {
 	}
 }
 
+func (vm *VM) executeSetIndexExpression(left, index, val object.Object) error {
+	switch {
+	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
+		return vm.executeArraySetIndex(left, index, val)
+	case left.Type() == object.HASH_OBJ:
+		return vm.executeHashSetIndex(left, index, val)
+	default:
+		return fmt.Errorf("index assignment not supported: %s", left.Type())
+	}
+}
+
+func (vm *VM) executeArraySetIndex(array, index, val object.Object) error {
+	arrayObject := array.(*object.Array)
+	i := index.(*object.Integer).Value
+	max := int64(len(arrayObject.Elements) - 1)
+
+	if i < 0 || i > max {
+		return fmt.Errorf("index out of bounds: %d", i)
+	}
+
+	arrayObject.Elements[i] = val
+	return nil
+}
+
+func (vm *VM) executeHashSetIndex(hash, index, val object.Object) error {
+	hashObject := hash.(*object.Hash)
+	key, ok := index.(object.Hashable)
+	if !ok {
+		return fmt.Errorf("unusable as hash key: %s", index.Type())
+	}
+
+	pair := object.HashPair{Key: index, Value: val}
+	hashObject.Pairs[key.HashKey()] = pair
+	return nil
+}
+
 func (vm *VM) executeArrayIndex(array, index object.Object) error {
 	arrayObject := array.(*object.Array)
 	i := index.(*object.Integer).Value
@@ -623,4 +715,49 @@ func nativeBoolToBooleanObject(input bool) *object.Boolean {
 		return True
 	}
 	return False
+}
+
+func (vm *VM) executeImport(constIndex int) error {
+	constant := vm.constants[constIndex]
+	function, ok := constant.(*object.CompiledFunction)
+	if !ok {
+		return fmt.Errorf("import const not function")
+	}
+
+	// Create Closure
+	closure := &object.Closure{Fn: function, FreeVariables: []object.Object{}}
+
+	// Create Module VM
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = NewFrame(closure, 0)
+
+	moduleVM := &VM{
+		constants:   vm.constants,
+		globals:     make([]object.Object, GlobalSize), // Fresh globals for module
+		stack:       [StackSize]object.Object{},
+		sp:          function.NumLocals, // Should be 0 based on fix
+		frames:      frames,
+		framesIndex: 1,
+	}
+
+	// Run
+	err := moduleVM.Run()
+	if err != nil {
+		return err
+	}
+
+	// Harvest Exports
+	exports := make(map[object.HashKey]object.HashPair)
+	for i, name := range function.GlobalNames {
+		if name == "" {
+			continue
+		}
+		val := moduleVM.globals[i]
+		if val != nil {
+			key := &object.String{Value: name}
+			exports[key.HashKey()] = object.HashPair{Key: key, Value: val}
+		}
+	}
+
+	return vm.push(&object.Hash{Pairs: exports})
 }

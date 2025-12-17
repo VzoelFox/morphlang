@@ -11,6 +11,8 @@ import (
 const (
 	_ int = iota
 	LOWEST
+	OR          // atau
+	AND         // dan
 	EQUALS      // ==
 	LESSGREATER // > or <
 	SUM         // +
@@ -21,6 +23,8 @@ const (
 )
 
 var precedences = map[lexer.TokenType]int{
+	lexer.ATAU:     OR,
+	lexer.DAN:      AND,
 	lexer.EQ:       EQUALS,
 	lexer.NOT_EQ:   EQUALS,
 	lexer.LT:       LESSGREATER,
@@ -33,6 +37,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.ASTERISK: PRODUCT,
 	lexer.LPAREN:   CALL,
 	lexer.LBRACKET: INDEX,
+	lexer.DOT:      INDEX, // Dot has high precedence
 }
 
 type (
@@ -112,8 +117,11 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(lexer.GT, p.parseInfixExpression)
 	p.registerInfix(lexer.LTE, p.parseInfixExpression)
 	p.registerInfix(lexer.GTE, p.parseInfixExpression)
+	p.registerInfix(lexer.DAN, p.parseInfixExpression)
+	p.registerInfix(lexer.ATAU, p.parseInfixExpression)
 	p.registerInfix(lexer.LPAREN, p.parseCallExpression)
 	p.registerInfix(lexer.LBRACKET, p.parseIndexExpression)
+	p.registerInfix(lexer.DOT, p.parseDotExpression)
 
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
@@ -189,24 +197,57 @@ func (p *Parser) parseStatement() Statement {
 	switch p.curToken.Type {
 	case lexer.KEMBALIKAN:
 		return p.parseReturnStatement()
-	case lexer.IDENT:
-		if p.peekTokenIs(lexer.ASSIGN) {
-			return p.parseAssignmentStatement()
-		}
-		return p.parseExpressionStatement()
+	case lexer.AMBIL:
+		return p.parseImportStatement()
+	case lexer.DARI:
+		return p.parseFromImportStatement()
 	default:
-		return p.parseExpressionStatement()
+		return p.parseExpressionOrAssignmentStatement()
 	}
 }
 
-func (p *Parser) parseAssignmentStatement() *AssignmentStatement {
-	stmt := &AssignmentStatement{Token: p.curToken}
-	stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+func (p *Parser) parseImportStatement() *ImportStatement {
+	stmt := &ImportStatement{Token: p.curToken}
 
-	p.nextToken() // eat IDENT
-	p.nextToken() // eat =
+	if !p.expectPeek(lexer.STRING) {
+		return nil
+	}
 
-	stmt.Value = p.parseExpression(LOWEST)
+	stmt.Path = p.curToken.Literal
+
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseFromImportStatement() *ImportStatement {
+	stmt := &ImportStatement{Token: p.curToken}
+
+	if !p.expectPeek(lexer.STRING) {
+		return nil
+	}
+	stmt.Path = p.curToken.Literal
+
+	if !p.expectPeek(lexer.AMBIL) {
+		return nil
+	}
+
+	identifiers := []string{}
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	identifiers = append(identifiers, p.curToken.Literal)
+
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		identifiers = append(identifiers, p.curToken.Literal)
+	}
+
+	stmt.Identifiers = identifiers
 
 	if p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken()
@@ -229,10 +270,25 @@ func (p *Parser) parseReturnStatement() *ReturnStatement {
 	return stmt
 }
 
-func (p *Parser) parseExpressionStatement() *ExpressionStatement {
-	stmt := &ExpressionStatement{Token: p.curToken}
+func (p *Parser) parseExpressionOrAssignmentStatement() Statement {
+	startToken := p.curToken
+	expr := p.parseExpression(LOWEST)
 
-	stmt.Expression = p.parseExpression(LOWEST)
+	if p.peekTokenIs(lexer.ASSIGN) {
+		p.nextToken() // move to =
+		assignToken := p.curToken
+		p.nextToken() // move to RHS
+
+		val := p.parseExpression(LOWEST)
+
+		if p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken()
+		}
+
+		return &AssignmentStatement{Token: assignToken, Name: expr, Value: val}
+	}
+
+	stmt := &ExpressionStatement{Token: startToken, Expression: expr}
 
 	if p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken()
@@ -471,7 +527,8 @@ func (p *Parser) parseInfixExpression(left Expression) Expression {
 func isBinaryOp(t lexer.TokenType) bool {
 	switch t {
 	case lexer.PLUS, lexer.MINUS, lexer.SLASH, lexer.ASTERISK,
-		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE:
+		lexer.EQ, lexer.NOT_EQ, lexer.LT, lexer.GT, lexer.LTE, lexer.GTE,
+		lexer.DAN, lexer.ATAU:
 		return true
 	}
 	return false
@@ -650,4 +707,16 @@ func (p *Parser) expectPeek(t lexer.TokenType) bool {
 
 func (p *Parser) noPrefixParseFnError(t lexer.TokenType) {
 	p.addDetailedError(p.curToken, "no prefix parse function for %s found", t)
+}
+
+func (p *Parser) parseDotExpression(left Expression) Expression {
+	token := p.curToken
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+
+	index := &StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+
+	return &IndexExpression{Token: token, Left: left, Index: index}
 }
