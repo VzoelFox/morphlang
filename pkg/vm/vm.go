@@ -17,6 +17,14 @@ var (
 	Null  = &object.Null{}
 )
 
+type VMSnapshot struct {
+	Stack       []object.Object
+	Globals     []object.Object
+	Frames      []*Frame
+	SP          int
+	FramesIndex int
+}
+
 type VM struct {
 	constants []object.Object
 	globals   []object.Object
@@ -28,6 +36,8 @@ type VM struct {
 	framesIndex int
 
 	LastPoppedStackElem object.Object
+
+	snapshots []VMSnapshot
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -45,6 +55,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 		sp:          0,
 		frames:      frames,
 		framesIndex: 1,
+		snapshots:   make([]VMSnapshot, 0),
 	}
 }
 
@@ -406,12 +417,40 @@ func (vm *VM) executeBuiltinCall(builtin *object.Builtin, numArgs int) error {
 	result := builtin.Fn(args...)
 
 	// INTERCEPT: luncurkan
-	if errObj, ok := result.(*object.Error); ok && errObj.Message == "luncurkan() requires VM context" {
-		threadObj, err := vm.spawn(args)
-		if err != nil {
-			result = &object.Error{Message: err.Error()}
-		} else {
-			result = threadObj
+	if errObj, ok := result.(*object.Error); ok {
+		msg := errObj.Message
+		if msg == "luncurkan() requires VM context" {
+			threadObj, err := vm.spawn(args)
+			if err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				result = threadObj
+			}
+		} else if msg == "SIGNAL:SNAPSHOT" {
+			if err := vm.snapshot(); err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				result = Null
+			}
+		} else if len(msg) >= 15 && msg[:15] == "SIGNAL:ROLLBACK" {
+			if err := vm.rollback(); err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				retMsg := "Rolled back"
+				if len(msg) > 16 {
+					retMsg = msg[16:]
+				}
+				// Special Handling: Rollback restores state to 'potret' call (0 args).
+				// We must clean up 1 slot (Func).
+				vm.sp = vm.sp - 1
+				return vm.push(&object.String{Value: retMsg})
+			}
+		} else if msg == "SIGNAL:COMMIT" {
+			if err := vm.commit(); err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				result = Null
+			}
 		}
 	}
 
@@ -452,6 +491,7 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 		sp:          cl.Fn.NumLocals, // Reserve space for locals on the stack
 		frames:      frames,
 		framesIndex: 1,
+		snapshots:   make([]VMSnapshot, 0),
 	}
 
 	resultCh := make(chan object.Object, 1)
@@ -494,6 +534,60 @@ func (vm *VM) pop() (object.Object, error) {
 	vm.sp--
 	vm.LastPoppedStackElem = o
 	return o, nil
+}
+
+func (vm *VM) snapshot() error {
+	stackCopy := make([]object.Object, StackSize)
+	copy(stackCopy, vm.stack[:])
+
+	globalsCopy := make([]object.Object, len(vm.globals))
+	copy(globalsCopy, vm.globals)
+
+	framesCopy := make([]*Frame, MaxFrames)
+	for i := 0; i < vm.framesIndex; i++ {
+		orig := vm.frames[i]
+		framesCopy[i] = &Frame{
+			cl:          orig.cl,
+			ip:          orig.ip,
+			basePointer: orig.basePointer,
+		}
+	}
+
+	snap := VMSnapshot{
+		Stack:       stackCopy,
+		Globals:     globalsCopy,
+		Frames:      framesCopy,
+		SP:          vm.sp,
+		FramesIndex: vm.framesIndex,
+	}
+
+	vm.snapshots = append(vm.snapshots, snap)
+	return nil
+}
+
+func (vm *VM) rollback() error {
+	if len(vm.snapshots) == 0 {
+		return fmt.Errorf("no snapshot to rollback")
+	}
+
+	last := vm.snapshots[len(vm.snapshots)-1]
+
+	copy(vm.stack[:], last.Stack)
+	copy(vm.globals, last.Globals)
+	copy(vm.frames, last.Frames)
+
+	vm.sp = last.SP
+	vm.framesIndex = last.FramesIndex
+
+	return nil
+}
+
+func (vm *VM) commit() error {
+	if len(vm.snapshots) == 0 {
+		return fmt.Errorf("no snapshot to commit")
+	}
+	vm.snapshots = vm.snapshots[:len(vm.snapshots)-1]
+	return nil
 }
 
 func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {

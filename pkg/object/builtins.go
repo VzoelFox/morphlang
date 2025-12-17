@@ -395,6 +395,25 @@ func init() {
 
 		return &String{Value: tObj.Value.Format(layout)}
 	})
+
+	// System Signals (Intercepted by VM)
+	RegisterBuiltin("potret", func(args ...Object) Object {
+		return &Error{Message: "SIGNAL:SNAPSHOT"}
+	})
+
+	RegisterBuiltin("pulih", func(args ...Object) Object {
+		msg := "Manual Rollback"
+		if len(args) > 0 {
+			if str, ok := args[0].(*String); ok {
+				msg = str.Value
+			}
+		}
+		return &Error{Message: "SIGNAL:ROLLBACK:" + msg}
+	})
+
+	RegisterBuiltin("simpan", func(args ...Object) Object {
+		return &Error{Message: "SIGNAL:COMMIT"}
+	})
 }
 
 // RegisterBuiltin registers a new builtin function dynamically.
