@@ -104,9 +104,7 @@ func (c *Cabinet) bringToRAM(drawerID int) error {
 	}
 
 	// Calculate Physical Address for this slot
-	base := uintptr(RAM.BasePointer())
-	offset := uintptr(freeSlot) * uintptr(DRAWER_SIZE)
-	physAddr := unsafe.Pointer(base + offset)
+	physAddr := unsafe.Add(RAM.BasePointer(), uintptr(freeSlot)*uintptr(DRAWER_SIZE))
 	destSlice := unsafe.Slice((*byte)(physAddr), DRAWER_SIZE)
 
 	// Load data if it was previously saved
@@ -144,9 +142,7 @@ func (c *Cabinet) evictToSwap(drawerID int) error {
 	}
 
 	// 1. Get RAM content
-	base := uintptr(RAM.BasePointer())
-	offset := uintptr(slot) * uintptr(DRAWER_SIZE)
-	physAddr := unsafe.Pointer(base + offset)
+	physAddr := unsafe.Add(RAM.BasePointer(), uintptr(slot)*uintptr(DRAWER_SIZE))
 	srcSlice := unsafe.Slice((*byte)(physAddr), DRAWER_SIZE)
 
 	// 2. Write to .z file

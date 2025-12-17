@@ -21,7 +21,7 @@ func Snapshot(filename string) error {
 	enc := gob.NewEncoder(f)
 
 	// 1. Save Cabinet Metadata
-	if err := enc.Encode(Lemari); err != nil {
+	if err := enc.Encode(&Lemari); err != nil {
 		return err
 	}
 
@@ -33,9 +33,7 @@ func Snapshot(filename string) error {
 
 		if d.PhysicalSlot != -1 {
 			// Resident in RAM
-			base := uintptr(RAM.BasePointer())
-			offset := uintptr(d.PhysicalSlot) * uintptr(DRAWER_SIZE)
-			ptr := unsafe.Pointer(base + offset)
+			ptr := unsafe.Add(RAM.BasePointer(), uintptr(d.PhysicalSlot)*uintptr(DRAWER_SIZE))
 			data = unsafe.Slice((*byte)(ptr), DRAWER_SIZE)
 		} else if d.IsSwapped && d.SwapOffset > 0 {
 			// In Swap File
