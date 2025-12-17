@@ -1,0 +1,12 @@
+# Fibonacci Recursive Example
+
+fungsi fib(n)
+  jika n < 2
+    kembalikan n
+  akhir
+  kembalikan fib(n - 1) + fib(n - 2)
+akhir
+
+cetak("Fibonacci 10:")
+hasil = fib(10)
+cetak(hasil)

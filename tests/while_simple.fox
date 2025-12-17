@@ -1,0 +1,6 @@
+i = 0
+selama i < 3
+  cetak(i)
+  i = i + 1
+akhir
+cetak("Selesai")

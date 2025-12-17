@@ -1,0 +1,8 @@
+i = 0
+selama i < 10
+  jika i == 5
+    berhenti
+  akhir
+  i = i + 1
+akhir
+cetak("Done")
