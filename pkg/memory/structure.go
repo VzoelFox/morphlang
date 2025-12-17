@@ -14,6 +14,14 @@ const (
 	MAX_VIRTUAL_DRAWERS = 1024
 )
 
+// DrawerLease represents exclusive ownership of a drawer by a unit
+type DrawerLease struct {
+	DrawerID   int
+	UnitID     int
+	SnapshotID int64 // Pointer to the snapshot taken at acquire time
+	IsActive   bool
+}
+
 // Tray represents a semi-space (Nampan).
 // It's a contiguous block of memory where we bump-allocate objects.
 type Tray struct {
@@ -37,6 +45,9 @@ type Drawer struct {
 	PrimaryTray  Tray
 	SecondaryTray Tray
 	IsPrimaryActive bool // Which tray is currently receiving allocations?
+
+	// Lease System
+	Lease *DrawerLease
 }
 
 // Cabinet represents the entire Heap (Lemari).
@@ -51,6 +62,10 @@ type Cabinet struct {
 	RAMSlots [PHYSICAL_SLOTS]int
 
 	ActiveDrawerIndex int
+
+	// Snapshot Store (Simple In-Memory Map for Phase X.1)
+	Snapshots      map[int64][]byte
+	NextSnapshotID int64
 }
 
 // Global Cabinet instance
@@ -62,6 +77,8 @@ func InitCabinet() {
 	InitSwap() // Initialize swap file
 
 	Lemari.Drawers = make([]Drawer, 0, MAX_VIRTUAL_DRAWERS)
+	Lemari.Snapshots = make(map[int64][]byte)
+	Lemari.NextSnapshotID = 1
 
 	// Reset RAM Slots
 	for i := 0; i < PHYSICAL_SLOTS; i++ {

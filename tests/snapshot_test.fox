@@ -1,0 +1,41 @@
+cetak("Test Snapshot/Rollback")
+
+x = 10
+cetak("x awal: " + x)
+
+status = potret()
+
+t = tipe(status)
+
+jika t == "STRING"
+  cetak("SYSTEM: Pulih terdeteksi. Pesan: " + status)
+  x = 10
+lainnya
+  x = 20
+  cetak("x diubah menjadi: " + x)
+  pulih("Terjadi Kesalahan")
+akhir
+
+cetak("x final (harap 10): " + x)
+
+jika x == 10
+  cetak("Tes Pulih SUKSES")
+lainnya
+  cetak("Tes Pulih GAGAL")
+akhir
+
+cetak("--- Test Commit ---")
+potret()
+x = 30
+simpan()
+cetak("x setelah simpan: " + x)
+
+# Bersihkan snapshot sisa dari tes pertama
+simpan()
+
+hasil = pulih("Coba lagi")
+jika adalah_galat(hasil)
+  cetak("Tes Simpan SUKSES (Gagal pulih: " + pesan_galat(hasil) + ")")
+lainnya
+  cetak("Tes Simpan GAGAL (Masih bisa pulih)")
+akhir

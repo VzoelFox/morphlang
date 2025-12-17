@@ -343,14 +343,26 @@ morph/
 
 ---
 
-### **PHASE X: Memory Management (Experimental)**
+### **PHASE X: Deterministic Execution Model (The "OS" Vision)**
 
-**Goal:** Create a custom memory allocator to replace Go's GC dependency.
+**Concept:** Transforming Morph from a simple VM into a deterministic execution engine with memory ownership, snapshot/rollback, and FIFO scheduling.
 
-- [x] Define `pkg/memory` structure (Arena, Ptr)
-- [x] Implement simple allocator (Bump Pointer)
-- [x] Implement advanced allocator (Cabinet/Drawer/Tray model)
-- [ ] Integrate with `pkg/object` (Refactor Object to use Ptr)
+**Patch X.1: Drawer Lease System (Foundation)**
+- [ ] Implement `DrawerLease` struct (`pkg/memory/lease.go`).
+- [ ] Implement `AcquireDrawer(unitID)` - Exclusive ownership.
+- [ ] Implement `CommitDrawer(lease)` - Finalize changes.
+- [ ] Implement `RollbackDrawer(lease)` - Revert to snapshot.
+- [ ] Integrate with `Cabinet` structure.
+
+**Patch X.2: VM Snapshot Opcodes (Error Recovery)**
+- [ ] Implement `OP_SNAPSHOT`, `OP_ROLLBACK`, `OP_COMMIT`.
+- [ ] Update VM to support State Checkpointing (Stack + IP + Locals).
+- [ ] Integrate VM with Memory Drawer Lease.
+
+**Patch X.3: Scheduler & FIFO (Orchestration)**
+- [ ] Implement FIFO Queue mechanism.
+- [ ] Implement Atomic Shard Assignment (CAS).
+- [ ] Implement Worker Units logic (Morph Routine).
 
 ---
 
@@ -364,6 +376,7 @@ v0.4.0 - Phase 3 complete (Interpreter MVP) ← MILESTONE
 v0.5.0 - Phase 4 complete (Polish & Docs)
 v1.0.0 - Phase 5 complete (Bytecode VM) ← PUBLIC RELEASE
 v1.1.0 - Phase 6 complete (Stdlib)
+v1.2.0 - Phase X.1 complete (Drawer Lease)
 ```
 
 ---

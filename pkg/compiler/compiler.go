@@ -18,10 +18,16 @@ type EmittedInstruction struct {
 	Position int
 }
 
+type LoopScope struct {
+	BreakPos    []int
+	ContinuePos []int
+}
+
 type CompilationScope struct {
 	instructions        Instructions
 	lastInstruction     EmittedInstruction
 	previousInstruction EmittedInstruction
+	loopScopes          []LoopScope
 }
 
 type Compiler struct {
@@ -39,6 +45,7 @@ func New() *Compiler {
 		instructions:        Instructions{},
 		lastInstruction:     EmittedInstruction{},
 		previousInstruction: EmittedInstruction{},
+		loopScopes:          []LoopScope{},
 	}
 
 	return &Compiler{
@@ -215,10 +222,13 @@ func (c *Compiler) Compile(node parser.Node) error {
 		// 3. Jump if False to End
 		jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
 
-		// 4. Pop previous result
+		// 4. Enter Loop Scope
+		c.enterLoop()
+
+		// 5. Pop previous result
 		c.emit(OpPop)
 
-		// 5. Body
+		// 6. Body
 		err = c.Compile(node.Body)
 		if err != nil {
 			return err
@@ -230,12 +240,25 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
 		}
 
-		// 6. Jump back to Start
+		// 7. Jump back to Start
 		c.emit(OpJump, loopStartPos)
 
-		// 7. Patch JumpNotTruthy
+		// 8. Leave Loop & Back-patching
+		loopScope := c.leaveLoop()
 		afterLoopPos := len(c.currentInstructions())
+
+		// Patch JumpNotTruthy (Normal Exit)
 		c.changeOperand(jumpNotTruthyPos, afterLoopPos)
+
+		// Patch Breaks (Go to End)
+		for _, pos := range loopScope.BreakPos {
+			c.changeOperand(pos, afterLoopPos)
+		}
+
+		// Patch Continues (Go to Start)
+		for _, pos := range loopScope.ContinuePos {
+			c.changeOperand(pos, loopStartPos)
+		}
 
 	case *parser.InfixExpression:
 		if node.Operator == "<" {
@@ -427,6 +450,24 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 		c.emit(OpIndex)
 
+	case *parser.BreakStatement:
+		scope := c.currentLoopScope()
+		if scope == nil {
+			return fmt.Errorf("'berhenti' hanya boleh digunakan di dalam loop")
+		}
+		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		pos := c.emit(OpJump, 9999)
+		scope.BreakPos = append(scope.BreakPos, pos)
+
+	case *parser.ContinueStatement:
+		scope := c.currentLoopScope()
+		if scope == nil {
+			return fmt.Errorf("'lanjut' hanya boleh digunakan di dalam loop")
+		}
+		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		pos := c.emit(OpJump, 9999)
+		scope.ContinuePos = append(scope.ContinuePos, pos)
+
 	case *parser.ImportStatement:
 		// 1. Resolve Path and Name
 		path := node.Path
@@ -562,6 +603,7 @@ func (c *Compiler) EnterScope() {
 		instructions:        Instructions{},
 		lastInstruction:     EmittedInstruction{},
 		previousInstruction: EmittedInstruction{},
+		loopScopes:          []LoopScope{},
 	}
 	c.scopes = append(c.scopes, scope)
 	c.scopeIndex++
@@ -784,4 +826,26 @@ func (c *Compiler) remapInstructions(ins []byte, indexMap map[int]int) {
 			offset += w
 		}
 	}
+}
+
+func (c *Compiler) currentLoopScope() *LoopScope {
+	scopes := c.scopes[c.scopeIndex].loopScopes
+	if len(scopes) == 0 {
+		return nil
+	}
+	return &c.scopes[c.scopeIndex].loopScopes[len(scopes)-1]
+}
+
+func (c *Compiler) enterLoop() {
+	c.scopes[c.scopeIndex].loopScopes = append(c.scopes[c.scopeIndex].loopScopes, LoopScope{
+		BreakPos:    []int{},
+		ContinuePos: []int{},
+	})
+}
+
+func (c *Compiler) leaveLoop() LoopScope {
+	scopes := c.scopes[c.scopeIndex].loopScopes
+	scope := scopes[len(scopes)-1]
+	c.scopes[c.scopeIndex].loopScopes = scopes[:len(scopes)-1]
+	return scope
 }

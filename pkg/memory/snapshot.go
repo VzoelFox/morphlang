@@ -2,6 +2,7 @@ package memory
 
 import (
 	"encoding/gob"
+	"fmt"
 	"os"
 	"unsafe"
 )
@@ -50,6 +51,68 @@ func Snapshot(filename string) error {
 		if err := enc.Encode(data); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// SnapshotDrawer creates an in-memory snapshot of a specific drawer.
+func (c *Cabinet) SnapshotDrawer(drawerID int) (int64, error) {
+	if drawerID < 0 || drawerID >= len(c.Drawers) {
+		return 0, fmt.Errorf("invalid drawer ID: %d", drawerID)
+	}
+
+	d := &c.Drawers[drawerID]
+
+	// Data buffer
+	data := make([]byte, DRAWER_SIZE)
+
+	if d.PhysicalSlot != -1 {
+		// Copy from RAM
+		ptr := unsafe.Add(RAM.BasePointer(), uintptr(d.PhysicalSlot)*uintptr(DRAWER_SIZE))
+		src := unsafe.Slice((*byte)(ptr), DRAWER_SIZE)
+		copy(data, src)
+	} else if d.IsSwapped && d.SwapOffset > 0 {
+		// Copy from Swap
+		if err := Swap.Restore(d.SwapOffset, data); err != nil {
+			return 0, err
+		}
+	}
+	// Else: Empty drawer, zero buffer
+
+	id := c.NextSnapshotID
+	c.NextSnapshotID++
+	c.Snapshots[id] = data
+
+	return id, nil
+}
+
+// RestoreDrawer reverts a drawer to the state stored in snapshotID.
+func (c *Cabinet) RestoreDrawer(drawerID int, snapshotID int64) error {
+	if drawerID < 0 || drawerID >= len(c.Drawers) {
+		return fmt.Errorf("invalid drawer ID: %d", drawerID)
+	}
+
+	data, ok := c.Snapshots[snapshotID]
+	if !ok {
+		return fmt.Errorf("snapshot %d not found", snapshotID)
+	}
+
+	d := &c.Drawers[drawerID]
+
+	if d.PhysicalSlot != -1 {
+		// Restore to RAM
+		ptr := unsafe.Add(RAM.BasePointer(), uintptr(d.PhysicalSlot)*uintptr(DRAWER_SIZE))
+		dst := unsafe.Slice((*byte)(ptr), DRAWER_SIZE)
+		copy(dst, data)
+	} else {
+		// Restore to Swap (Spill new version)
+		offset, err := Swap.Spill(data)
+		if err != nil {
+			return err
+		}
+		d.SwapOffset = offset
+		d.IsSwapped = true
 	}
 
 	return nil
