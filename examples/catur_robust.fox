@@ -1,0 +1,99 @@
+# Catur Angka Robust (Demo Snapshot/Rollback)
+
+fungsi inisialisasi_papan()
+  kembalikan [-9, -1, -1, -1,
+               0,  0,  0,  0,
+               0,  0,  0,  0,
+               1,  1,  1,  9]
+akhir
+
+fungsi cetak_papan(p)
+  cetak("Papan:")
+  i = 0
+  selama i < 4
+    baris = ""
+    j = 0
+    selama j < 4
+      idx = i * 4 + j
+      val = p[idx]
+      simbol = "."
+      jika val == 1
+        simbol = "P"
+      atau_jika val == 9
+        simbol = "R"
+      atau_jika val == -1
+        simbol = "p"
+      atau_jika val == -9
+        simbol = "r"
+      akhir
+      baris = baris + simbol + " "
+      j = j + 1
+    akhir
+    cetak(baris)
+    i = i + 1
+  akhir
+  cetak("----------------")
+akhir
+
+fungsi pikir_keras(iterasi, offset)
+  seed = iterasi + offset
+  mod = seed - (seed / 3) * 3
+
+  jika mod == 0
+    kembalikan galat("Simulasi Crash")
+  akhir
+
+  kembalikan 100
+akhir
+
+fungsi ai_jalan(papan, offset)
+  cetak("[AI] Sedang berpikir...")
+
+  pos_raja = -1
+  i = 0
+  selama i < 16
+    jika papan[i] == -9
+      pos_raja = i
+      berhenti
+    akhir
+    i = i + 1
+  akhir
+
+  target = pos_raja + 4
+
+  status = potret()
+
+  jika status != kosong
+    cetak("[AI] ERROR: " + status)
+    cetak("[AI] Fallback.")
+    kembalikan papan
+  akhir
+
+  hasil = pikir_keras(pos_raja, offset)
+
+  jika adalah_galat(hasil)
+    pulih(pesan_galat(hasil))
+  akhir
+
+  jika target < 16
+    jika papan[target] == 0
+      papan[target] = -9
+      papan[pos_raja] = 0
+      cetak("[AI] Raja maju ke " + target)
+    akhir
+  akhir
+
+  simpan()
+  kembalikan papan
+akhir
+
+papan = inisialisasi_papan()
+cetak_papan(papan)
+
+# Turn 1
+papan = ai_jalan(papan, 1)
+cetak_papan(papan)
+
+# Turn 2
+papan = ai_jalan(papan, 2)
+cetak_papan(papan)

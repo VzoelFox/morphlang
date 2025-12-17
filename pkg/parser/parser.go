@@ -97,6 +97,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(lexer.INTERP_START, p.parseStringLiteral)
 	p.registerPrefix(lexer.BENAR, p.parseBoolean)
 	p.registerPrefix(lexer.SALAH, p.parseBoolean)
+	p.registerPrefix(lexer.KOSONG, p.parseNull)
 	p.registerPrefix(lexer.BANG, p.parsePrefixExpression)
 	p.registerPrefix(lexer.MINUS, p.parsePrefixExpression)
 	p.registerPrefix(lexer.LPAREN, p.parseGroupedExpression)
@@ -209,6 +210,10 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseImportStatement()
 	case lexer.DARI:
 		return p.parseFromImportStatement()
+	case lexer.BERHENTI:
+		return p.parseBreakStatement()
+	case lexer.LANJUT:
+		return p.parseContinueStatement()
 	default:
 		return p.parseExpressionOrAssignmentStatement()
 	}
@@ -227,6 +232,22 @@ func (p *Parser) parseImportStatement() *ImportStatement {
 		p.nextToken()
 	}
 
+	return stmt
+}
+
+func (p *Parser) parseBreakStatement() *BreakStatement {
+	stmt := &BreakStatement{Token: p.curToken}
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+	return stmt
+}
+
+func (p *Parser) parseContinueStatement() *ContinueStatement {
+	stmt := &ContinueStatement{Token: p.curToken}
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
+	}
 	return stmt
 }
 
@@ -401,6 +422,10 @@ func (p *Parser) parseStringLiteral() Expression {
 
 func (p *Parser) parseBoolean() Expression {
 	return &BooleanLiteral{Token: p.curToken, Value: p.curTokenIs(lexer.BENAR)}
+}
+
+func (p *Parser) parseNull() Expression {
+	return &NullLiteral{Token: p.curToken}
 }
 
 func (p *Parser) parseArrayLiteral() Expression {

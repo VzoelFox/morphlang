@@ -17,6 +17,14 @@ var (
 	Null  = &object.Null{}
 )
 
+type VMSnapshot struct {
+	Stack       []object.Object
+	Globals     []object.Object
+	Frames      []*Frame
+	SP          int
+	FramesIndex int
+}
+
 type VM struct {
 	constants []object.Object
 	globals   []object.Object
@@ -28,6 +36,8 @@ type VM struct {
 	framesIndex int
 
 	LastPoppedStackElem object.Object
+
+	snapshots []VMSnapshot
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -45,6 +55,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 		sp:          0,
 		frames:      frames,
 		framesIndex: 1,
+		snapshots:   make([]VMSnapshot, 0),
 	}
 }
 
@@ -52,9 +63,14 @@ func (vm *VM) currentFrame() *Frame {
 	return vm.frames[vm.framesIndex-1]
 }
 
-func (vm *VM) pushFrame(f *Frame) {
+func (vm *VM) pushFrame(f *Frame) error {
+	if vm.framesIndex >= MaxFrames {
+		return fmt.Errorf("stack overflow")
+	}
+
 	vm.frames[vm.framesIndex] = f
 	vm.framesIndex++
+	return nil
 }
 
 func (vm *VM) popFrame() *Frame {
@@ -115,7 +131,10 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpPop:
-			vm.pop()
+			_, err := vm.pop()
+			if err != nil {
+				return err
+			}
 
 		case compiler.OpDup:
 			top := vm.StackTop()
@@ -135,7 +154,10 @@ func (vm *VM) Run() error {
 			pos := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
 
-			condition := vm.pop()
+			condition, err := vm.pop()
+			if err != nil {
+				return err
+			}
 			if !isTruthy(condition) {
 				vm.currentFrame().ip = pos - 1
 			}
@@ -143,7 +165,11 @@ func (vm *VM) Run() error {
 		case compiler.OpStoreGlobal:
 			globalIndex := compiler.ReadUint16(ins[ip+1:])
 			vm.currentFrame().ip += 2
-			vm.globals[globalIndex] = vm.pop()
+			val, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			vm.globals[globalIndex] = val
 
 		case compiler.OpLoadGlobal:
 			globalIndex := compiler.ReadUint16(ins[ip+1:])
@@ -157,7 +183,11 @@ func (vm *VM) Run() error {
 			localIndex := int(ins[ip+1])
 			vm.currentFrame().ip += 1
 			frame := vm.currentFrame()
-			vm.stack[frame.basePointer+localIndex] = vm.pop()
+			val, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			vm.stack[frame.basePointer+localIndex] = val
 
 		case compiler.OpLoadLocal:
 			localIndex := int(ins[ip+1])
@@ -182,6 +212,11 @@ func (vm *VM) Run() error {
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
 
+			// Safety Check
+			if vm.sp-numElements < 0 {
+				return fmt.Errorf("stack underflow on array build")
+			}
+
 			array := vm.buildArray(vm.sp-numElements, vm.sp)
 			vm.sp = vm.sp - numElements
 
@@ -193,6 +228,11 @@ func (vm *VM) Run() error {
 		case compiler.OpHash:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
+
+			// Safety Check
+			if vm.sp-numElements < 0 {
+				return fmt.Errorf("stack underflow on hash build")
+			}
 
 			hash, err := vm.buildHash(vm.sp-numElements, vm.sp)
 			if err != nil {
@@ -206,20 +246,35 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpIndex:
-			index := vm.pop()
-			left := vm.pop()
+			index, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			left, err := vm.pop()
+			if err != nil {
+				return err
+			}
 
-			err := vm.executeIndexExpression(left, index)
+			err = vm.executeIndexExpression(left, index)
 			if err != nil {
 				return err
 			}
 
 		case compiler.OpSetIndex:
-			val := vm.pop()
-			index := vm.pop()
-			left := vm.pop()
+			val, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			index, err := vm.pop()
+			if err != nil {
+				return err
+			}
+			left, err := vm.pop()
+			if err != nil {
+				return err
+			}
 
-			err := vm.executeSetIndexExpression(left, index, val)
+			err = vm.executeSetIndexExpression(left, index, val)
 			if err != nil {
 				return err
 			}
@@ -234,7 +289,10 @@ func (vm *VM) Run() error {
 			}
 
 		case compiler.OpReturnValue:
-			returnValue := vm.pop()
+			returnValue, err := vm.pop()
+			if err != nil {
+				return err
+			}
 
 			if vm.framesIndex == 1 {
 				vm.popFrame()
@@ -247,7 +305,7 @@ func (vm *VM) Run() error {
 				return fmt.Errorf("stack underflow on return")
 			}
 
-			err := vm.push(returnValue)
+			err = vm.push(returnValue)
 			if err != nil {
 				return err
 			}
@@ -302,6 +360,11 @@ func (vm *VM) pushClosure(constIndex int, numFree int) error {
 		return fmt.Errorf("not a function: %+v", constant)
 	}
 
+	// Safety Check
+	if vm.sp-numFree < 0 {
+		return fmt.Errorf("stack underflow on closure creation")
+	}
+
 	free := make([]object.Object, numFree)
 	for i := 0; i < numFree; i++ {
 		free[i] = vm.stack[vm.sp-numFree+i]
@@ -313,6 +376,11 @@ func (vm *VM) pushClosure(constIndex int, numFree int) error {
 }
 
 func (vm *VM) executeCall(numArgs int) error {
+	// Safety Check
+	if vm.sp-1-numArgs < 0 {
+		return fmt.Errorf("stack underflow on call")
+	}
+
 	callee := vm.stack[vm.sp-1-numArgs]
 	switch callee := callee.(type) {
 	case *object.Closure:
@@ -322,7 +390,10 @@ func (vm *VM) executeCall(numArgs int) error {
 		}
 
 		frame := NewFrame(callee, vm.sp-numArgs)
-		vm.pushFrame(frame)
+		err := vm.pushFrame(frame)
+		if err != nil {
+			return err
+		}
 		vm.sp = frame.basePointer + callee.Fn.NumLocals
 		return nil
 
@@ -335,21 +406,56 @@ func (vm *VM) executeCall(numArgs int) error {
 }
 
 func (vm *VM) executeBuiltinCall(builtin *object.Builtin, numArgs int) error {
+	// Safety Check not strictly needed here because callee check in executeCall ensures args are present
+	// But let's be safe. sp - numArgs is the start.
+	if vm.sp-numArgs < 0 {
+		 return fmt.Errorf("stack underflow on builtin call")
+	}
+
 	args := vm.stack[vm.sp-numArgs : vm.sp]
 
 	result := builtin.Fn(args...)
 
 	// INTERCEPT: luncurkan
-	if errObj, ok := result.(*object.Error); ok && errObj.Message == "luncurkan() requires VM context" {
-		threadObj, err := vm.spawn(args)
-		if err != nil {
-			result = &object.Error{Message: err.Error()}
-		} else {
-			result = threadObj
+	if errObj, ok := result.(*object.Error); ok {
+		msg := errObj.Message
+		if msg == "luncurkan() requires VM context" {
+			threadObj, err := vm.spawn(args)
+			if err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				result = threadObj
+			}
+		} else if msg == "SIGNAL:SNAPSHOT" {
+			if err := vm.snapshot(); err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				result = Null
+			}
+		} else if len(msg) >= 15 && msg[:15] == "SIGNAL:ROLLBACK" {
+			if err := vm.rollback(); err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				retMsg := "Rolled back"
+				if len(msg) > 16 {
+					retMsg = msg[16:]
+				}
+				// Special Handling: Rollback restores state to 'potret' call (0 args).
+				// We must clean up 1 slot (Func).
+				vm.sp = vm.sp - 1
+				return vm.push(&object.String{Value: retMsg})
+			}
+		} else if msg == "SIGNAL:COMMIT" {
+			if err := vm.commit(); err != nil {
+				result = &object.Error{Message: err.Error()}
+			} else {
+				result = Null
+			}
 		}
 	}
 
 	vm.sp = vm.sp - numArgs - 1 // Pop args + function
+	// Wait, sp could go negative here if logic is wrong, but previous checks ensure it.
 
 	if result != nil {
 		return vm.push(result)
@@ -385,6 +491,7 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 		sp:          cl.Fn.NumLocals, // Reserve space for locals on the stack
 		frames:      frames,
 		framesIndex: 1,
+		snapshots:   make([]VMSnapshot, 0),
 	}
 
 	resultCh := make(chan object.Object, 1)
@@ -419,16 +526,79 @@ func (vm *VM) push(o object.Object) error {
 	return nil
 }
 
-func (vm *VM) pop() object.Object {
+func (vm *VM) pop() (object.Object, error) {
+	if vm.sp == 0 {
+		return nil, fmt.Errorf("stack underflow")
+	}
 	o := vm.stack[vm.sp-1]
 	vm.sp--
 	vm.LastPoppedStackElem = o
-	return o
+	return o, nil
+}
+
+func (vm *VM) snapshot() error {
+	stackCopy := make([]object.Object, StackSize)
+	copy(stackCopy, vm.stack[:])
+
+	globalsCopy := make([]object.Object, len(vm.globals))
+	copy(globalsCopy, vm.globals)
+
+	framesCopy := make([]*Frame, MaxFrames)
+	for i := 0; i < vm.framesIndex; i++ {
+		orig := vm.frames[i]
+		framesCopy[i] = &Frame{
+			cl:          orig.cl,
+			ip:          orig.ip,
+			basePointer: orig.basePointer,
+		}
+	}
+
+	snap := VMSnapshot{
+		Stack:       stackCopy,
+		Globals:     globalsCopy,
+		Frames:      framesCopy,
+		SP:          vm.sp,
+		FramesIndex: vm.framesIndex,
+	}
+
+	vm.snapshots = append(vm.snapshots, snap)
+	return nil
+}
+
+func (vm *VM) rollback() error {
+	if len(vm.snapshots) == 0 {
+		return fmt.Errorf("no snapshot to rollback")
+	}
+
+	last := vm.snapshots[len(vm.snapshots)-1]
+
+	copy(vm.stack[:], last.Stack)
+	copy(vm.globals, last.Globals)
+	copy(vm.frames, last.Frames)
+
+	vm.sp = last.SP
+	vm.framesIndex = last.FramesIndex
+
+	return nil
+}
+
+func (vm *VM) commit() error {
+	if len(vm.snapshots) == 0 {
+		return fmt.Errorf("no snapshot to commit")
+	}
+	vm.snapshots = vm.snapshots[:len(vm.snapshots)-1]
+	return nil
 }
 
 func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
-	right := vm.pop()
-	left := vm.pop()
+	right, err := vm.pop()
+	if err != nil {
+		return err
+	}
+	left, err := vm.pop()
+	if err != nil {
+		return err
+	}
 
 	if left == nil {
 		return fmt.Errorf("executeBinaryOperation: left operand is nil")
@@ -513,8 +683,14 @@ func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right objec
 }
 
 func (vm *VM) executeComparison(op compiler.Opcode) error {
-	right := vm.pop()
-	left := vm.pop()
+	right, err := vm.pop()
+	if err != nil {
+		return err
+	}
+	left, err := vm.pop()
+	if err != nil {
+		return err
+	}
 
 	if left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ {
 		return vm.executeIntegerComparison(op, left, right)
@@ -567,7 +743,10 @@ func (vm *VM) executeStringComparison(op compiler.Opcode, left, right object.Obj
 }
 
 func (vm *VM) executeBangOperator() error {
-	operand := vm.pop()
+	operand, err := vm.pop()
+	if err != nil {
+		return err
+	}
 
 	if isTruthy(operand) {
 		return vm.push(False)
@@ -576,7 +755,10 @@ func (vm *VM) executeBangOperator() error {
 }
 
 func (vm *VM) executeMinusOperator() error {
-	operand := vm.pop()
+	operand, err := vm.pop()
+	if err != nil {
+		return err
+	}
 
 	if operand.Type() != object.INTEGER_OBJ {
 		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported type for negation: %s", operand.Type())})
