@@ -112,6 +112,12 @@ func (vm *VM) Run() error {
 				return err
 			}
 
+		case compiler.OpAnd, compiler.OpOr, compiler.OpXor, compiler.OpLShift, compiler.OpRShift:
+			err := vm.executeBitwiseOperation(op)
+			if err != nil {
+				return err
+			}
+
 		case compiler.OpEqual, compiler.OpNotEqual, compiler.OpGreaterThan, compiler.OpGreaterEqual:
 			err := vm.executeComparison(op)
 			if err != nil {
@@ -126,6 +132,12 @@ func (vm *VM) Run() error {
 
 		case compiler.OpMinus:
 			err := vm.executeMinusOperator()
+			if err != nil {
+				return err
+			}
+
+		case compiler.OpBitNot:
+			err := vm.executeBitNotOperator()
 			if err != nil {
 				return err
 			}
@@ -766,6 +778,69 @@ func (vm *VM) executeMinusOperator() error {
 
 	value := operand.(*object.Integer).Value
 	return vm.push(&object.Integer{Value: -value})
+}
+
+func (vm *VM) executeBitNotOperator() error {
+	operand, err := vm.pop()
+	if err != nil {
+		return err
+	}
+
+	if operand.Type() != object.INTEGER_OBJ {
+		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported type for bitwise not: %s", operand.Type())})
+	}
+
+	value := operand.(*object.Integer).Value
+	return vm.push(&object.Integer{Value: ^value})
+}
+
+func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
+	right, err := vm.pop()
+	if err != nil {
+		return err
+	}
+	left, err := vm.pop()
+	if err != nil {
+		return err
+	}
+
+	if left.Type() != object.INTEGER_OBJ || right.Type() != object.INTEGER_OBJ {
+		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported types for bitwise operation: %s %s", left.Type(), right.Type())})
+	}
+
+	leftVal := left.(*object.Integer).Value
+	rightVal := right.(*object.Integer).Value
+	var result int64
+
+	// DEBUG PRINT
+	// fmt.Printf("DEBUG Bitwise: Op=%d Left=%d Right=%d\n", op, leftVal, rightVal)
+
+	switch op {
+	case compiler.OpAnd:
+		result = leftVal & rightVal
+	case compiler.OpOr:
+		result = leftVal | rightVal
+	case compiler.OpXor:
+		result = leftVal ^ rightVal
+	case compiler.OpLShift:
+		// Go shift expects unsigned int for count
+		if rightVal < 0 {
+			return vm.push(&object.Error{Message: "negative shift count"})
+		}
+		result = leftVal << uint64(rightVal)
+	case compiler.OpRShift:
+		if rightVal < 0 {
+			return vm.push(&object.Error{Message: "negative shift count"})
+		}
+		result = leftVal >> uint64(rightVal)
+	default:
+		// Fallback for debugging - maybe op is wrong?
+		return fmt.Errorf("unknown bitwise operator: %d (Left=%d, Right=%d)", op, leftVal, rightVal)
+	}
+
+	// fmt.Printf("DEBUG Result: %d\n", result)
+
+	return vm.push(&object.Integer{Value: result})
 }
 
 func (vm *VM) buildArray(startIndex, endIndex int) object.Object {
