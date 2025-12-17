@@ -43,9 +43,8 @@ func (c *Cabinet) resolve(p Ptr) (unsafe.Pointer, error) {
 
 	// Calculate Physical Address
 	// RAM Base + (Slot * DrawerSize) + Offset
-	base := uintptr(RAM.BasePointer())
-	slotOffset := uintptr(slot) * uintptr(DRAWER_SIZE)
-	physAddr := base + slotOffset + uintptr(offset)
+	offsetBytes := uintptr(slot)*uintptr(DRAWER_SIZE) + uintptr(offset)
+	physAddr := unsafe.Add(RAM.BasePointer(), offsetBytes)
 
-	return unsafe.Pointer(physAddr), nil
+	return physAddr, nil
 }

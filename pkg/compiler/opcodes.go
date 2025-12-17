@@ -7,6 +7,7 @@ type Opcode byte
 const (
 	// Stack Manipulation
 	OpPop Opcode = 0x01
+	OpDup Opcode = 0x02
 
 	// Constants & Variables
 	OpLoadConst  Opcode = 0x10
@@ -20,6 +21,7 @@ const (
 	OpArray Opcode = 0x1A
 	OpHash  Opcode = 0x1B
 	OpIndex Opcode = 0x1C
+	OpSetIndex Opcode = 0x1D
 
 	// Arithmetic & Logic
 	OpAdd Opcode = 0x20
@@ -52,6 +54,7 @@ type Definition struct {
 
 var definitions = map[Opcode]*Definition{
 	OpPop:         {"OpPop", []int{}},
+	OpDup:         {"OpDup", []int{}},
 	OpLoadConst:   {"OpLoadConst", []int{2}}, // u16 index
 	OpLoadGlobal:  {"OpLoadGlobal", []int{2}}, // u16 index
 	OpStoreGlobal: {"OpStoreGlobal", []int{2}}, // u16 index
@@ -61,6 +64,7 @@ var definitions = map[Opcode]*Definition{
 	OpArray:       {"OpArray", []int{2}}, // u16 element count
 	OpHash:        {"OpHash", []int{2}}, // u16 pair count (keys + values)
 	OpIndex:       {"OpIndex", []int{}},
+	OpSetIndex:    {"OpSetIndex", []int{}},
 	OpAdd:         {"OpAdd", []int{}},
 	OpSub:         {"OpSub", []int{}},
 	OpMul:         {"OpMul", []int{}},

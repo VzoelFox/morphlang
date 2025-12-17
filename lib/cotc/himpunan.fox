@@ -1,0 +1,45 @@
+# COTC: Himpunan (Set)
+
+fungsi baru()
+  kembalikan {}
+akhir
+
+fungsi tambah(set, elemen)
+  set[elemen] = benar
+  kembalikan set
+akhir
+
+fungsi ada(set, elemen)
+  kembalikan set[elemen] == benar
+akhir
+
+fungsi hapus(set, elemen)
+  set[elemen] = salah
+  kembalikan set
+akhir
+
+fungsi gabung_set(s1, s2)
+  result = {}
+
+  keys1 = kunci(s1)
+  i = 0
+  selama i < panjang(keys1)
+    k = keys1[i]
+    jika s1[k]
+      result[k] = benar
+    akhir
+    i = i + 1
+  akhir
+
+  keys2 = kunci(s2)
+  i = 0
+  selama i < panjang(keys2)
+    k = keys2[i]
+    jika s2[k]
+      result[k] = benar
+    akhir
+    i = i + 1
+  akhir
+
+  kembalikan result
+akhir

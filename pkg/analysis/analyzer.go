@@ -127,24 +127,26 @@ func (a *Analyzer) analyzeTopLevel(stmt parser.Statement) {
 		}
 	case *parser.AssignmentStatement:
 		// Global variable
-		name := s.Name.Value
-		inferredType := "unknown"
+		if ident, ok := s.Name.(*parser.Identifier); ok {
+			name := ident.Value
+			inferredType := "unknown"
 
-		// Simple type inference for literals
-		switch s.Value.(type) {
-		case *parser.IntegerLiteral:
-			inferredType = "integer"
-		case *parser.StringLiteral:
-			inferredType = "string"
-		case *parser.BooleanLiteral:
-			inferredType = "boolean"
-		}
+			// Simple type inference for literals
+			switch s.Value.(type) {
+			case *parser.IntegerLiteral:
+				inferredType = "integer"
+			case *parser.StringLiteral:
+				inferredType = "string"
+			case *parser.BooleanLiteral:
+				inferredType = "boolean"
+			}
 
-		a.context.GlobalVars[name] = &Variable{
-			Line: s.Token.Line,
-			Type: inferredType,
+			a.context.GlobalVars[name] = &Variable{
+				Line: s.Token.Line,
+				Type: inferredType,
+			}
+			a.defineInCurrentScope(name) // Mark global var
 		}
-		a.defineInCurrentScope(name) // Mark global var
 		a.walkExpression(s.Value, func(node parser.Node) {})
 	}
 }
@@ -213,29 +215,31 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 		}
 		// Local vars logic (Closure Aware)
 		if assign, ok := node.(*parser.AssignmentStatement); ok {
-			varName := assign.Name.Value
+			if ident, ok := assign.Name.(*parser.Identifier); ok {
+				varName := ident.Value
 
-			// Check if variable is defined in any scope up the chain
-			if a.isDefined(varName) {
-				// It's an UPDATE to an existing variable (closure or local update), NOT a new local decl
-				// Do nothing (don't register as new local var)
-			} else {
-				// It's a NEW declaration in this scope
-				a.defineInCurrentScope(varName)
+				// Check if variable is defined in any scope up the chain
+				if a.isDefined(varName) {
+					// It's an UPDATE to an existing variable (closure or local update), NOT a new local decl
+					// Do nothing (don't register as new local var)
+				} else {
+					// It's a NEW declaration in this scope
+					a.defineInCurrentScope(varName)
 
-				// Register in symbol table as Local Var
-				found := false
-				for _, v := range sym.LocalVars {
-					if v == varName {
-						found = true
-						break
+					// Register in symbol table as Local Var
+					found := false
+					for _, v := range sym.LocalVars {
+						if v == varName {
+							found = true
+							break
+						}
 					}
-				}
-				if !found {
-					sym.LocalVars = append(sym.LocalVars, varName)
-					a.context.LocalScopes[name][varName] = &Variable{
-						Line: assign.Token.Line,
-						Type: "inferred",
+					if !found {
+						sym.LocalVars = append(sym.LocalVars, varName)
+						a.context.LocalScopes[name][varName] = &Variable{
+							Line: assign.Token.Line,
+							Type: "inferred",
+						}
 					}
 				}
 			}
@@ -284,6 +288,7 @@ func (a *Analyzer) walkStatement(stmt parser.Statement, visitor func(parser.Node
 			a.walkExpression(s.ReturnValue, visitor)
 		}
 	case *parser.AssignmentStatement:
+		a.walkExpression(s.Name, visitor)
 		a.walkExpression(s.Value, visitor)
 	}
 }
