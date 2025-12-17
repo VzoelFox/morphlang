@@ -291,8 +291,13 @@ func TestAssignmentStatements(t *testing.T) {
 			continue
 		}
 
-		if assignStmt.Name.Value != tt.expectedIdentifier {
-			t.Errorf("assignStmt.Name.Value not %s. got=%s", tt.expectedIdentifier, assignStmt.Name.Value)
+		ident, ok := assignStmt.Name.(*Identifier)
+		if !ok {
+			t.Errorf("assignStmt.Name not *Identifier. got=%T", assignStmt.Name)
+			continue
+		}
+		if ident.Value != tt.expectedIdentifier {
+			t.Errorf("ident.Value not %s. got=%s", tt.expectedIdentifier, ident.Value)
 		}
 
 		if !testLiteralExpression(t, assignStmt.Value, tt.expectedValue) {

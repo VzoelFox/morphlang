@@ -92,20 +92,44 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 	case *parser.AssignmentStatement:
-		err := c.Compile(node.Value)
-		if err != nil {
-			return err
-		}
+		switch name := node.Name.(type) {
+		case *parser.Identifier:
+			err := c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
 
-		symbol, ok := c.symbolTable.Resolve(node.Name.Value)
-		if !ok {
-			symbol = c.symbolTable.Define(node.Name.Value)
-		}
+			symbol, ok := c.symbolTable.Resolve(name.Value)
+			if !ok {
+				symbol = c.symbolTable.Define(name.Value)
+			}
 
-		if symbol.Scope == GlobalScope {
-			c.emit(OpStoreGlobal, symbol.Index)
-		} else {
-			c.emit(OpStoreLocal, symbol.Index)
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+
+		case *parser.IndexExpression:
+			err := c.Compile(name.Left)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(name.Index)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpSetIndex)
+
+		default:
+			return fmt.Errorf("assignment to %T not supported", node.Name)
 		}
 
 	case *parser.Identifier:

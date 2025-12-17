@@ -333,7 +333,7 @@ func (rs *ReturnStatement) String() string {
 
 type AssignmentStatement struct {
 	Token lexer.Token
-	Name  *Identifier
+	Name  Expression
 	Value Expression
 }
 

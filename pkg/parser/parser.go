@@ -195,30 +195,9 @@ func (p *Parser) parseStatement() Statement {
 	switch p.curToken.Type {
 	case lexer.KEMBALIKAN:
 		return p.parseReturnStatement()
-	case lexer.IDENT:
-		if p.peekTokenIs(lexer.ASSIGN) {
-			return p.parseAssignmentStatement()
-		}
-		return p.parseExpressionStatement()
 	default:
-		return p.parseExpressionStatement()
+		return p.parseExpressionOrAssignmentStatement()
 	}
-}
-
-func (p *Parser) parseAssignmentStatement() *AssignmentStatement {
-	stmt := &AssignmentStatement{Token: p.curToken}
-	stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
-
-	p.nextToken() // eat IDENT
-	p.nextToken() // eat =
-
-	stmt.Value = p.parseExpression(LOWEST)
-
-	if p.peekTokenIs(lexer.SEMICOLON) {
-		p.nextToken()
-	}
-
-	return stmt
 }
 
 func (p *Parser) parseReturnStatement() *ReturnStatement {
@@ -235,10 +214,25 @@ func (p *Parser) parseReturnStatement() *ReturnStatement {
 	return stmt
 }
 
-func (p *Parser) parseExpressionStatement() *ExpressionStatement {
-	stmt := &ExpressionStatement{Token: p.curToken}
+func (p *Parser) parseExpressionOrAssignmentStatement() Statement {
+	startToken := p.curToken
+	expr := p.parseExpression(LOWEST)
 
-	stmt.Expression = p.parseExpression(LOWEST)
+	if p.peekTokenIs(lexer.ASSIGN) {
+		p.nextToken() // move to =
+		assignToken := p.curToken
+		p.nextToken() // move to RHS
+
+		val := p.parseExpression(LOWEST)
+
+		if p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken()
+		}
+
+		return &AssignmentStatement{Token: assignToken, Name: expr, Value: val}
+	}
+
+	stmt := &ExpressionStatement{Token: startToken, Expression: expr}
 
 	if p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken()
