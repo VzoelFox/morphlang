@@ -52,9 +52,14 @@ func (vm *VM) currentFrame() *Frame {
 	return vm.frames[vm.framesIndex-1]
 }
 
-func (vm *VM) pushFrame(f *Frame) {
+func (vm *VM) pushFrame(f *Frame) error {
+	if vm.framesIndex >= MaxFrames {
+		return fmt.Errorf("stack overflow")
+	}
+
 	vm.frames[vm.framesIndex] = f
 	vm.framesIndex++
+	return nil
 }
 
 func (vm *VM) popFrame() *Frame {
@@ -322,7 +327,10 @@ func (vm *VM) executeCall(numArgs int) error {
 		}
 
 		frame := NewFrame(callee, vm.sp-numArgs)
-		vm.pushFrame(frame)
+		err := vm.pushFrame(frame)
+		if err != nil {
+			return err
+		}
 		vm.sp = frame.basePointer + callee.Fn.NumLocals
 		return nil
 
