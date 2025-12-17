@@ -414,6 +414,63 @@ func init() {
 	RegisterBuiltin("simpan", func(args ...Object) Object {
 		return &Error{Message: "SIGNAL:COMMIT"}
 	})
+
+	// Atom Primitives
+	RegisterBuiltin("atom_baru", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		return &Atom{Value: args[0]}
+	})
+
+	RegisterBuiltin("atom_baca", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		atom, ok := args[0].(*Atom)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument must be ATOM, got %s", args[0].Type())}
+		}
+		atom.Mu.Lock()
+		defer atom.Mu.Unlock()
+		return atom.Value
+	})
+
+	RegisterBuiltin("atom_tulis", func(args ...Object) Object {
+		if len(args) != 2 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
+		}
+		atom, ok := args[0].(*Atom)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("first argument must be ATOM, got %s", args[0].Type())}
+		}
+		atom.Mu.Lock()
+		defer atom.Mu.Unlock()
+		atom.Value = args[1]
+		return &Null{}
+	})
+
+	RegisterBuiltin("atom_tukar", func(args ...Object) Object {
+		if len(args) != 3 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 3, got %d", len(args))}
+		}
+		atom, ok := args[0].(*Atom)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("first argument must be ATOM, got %s", args[0].Type())}
+		}
+
+		oldVal := args[1]
+		newVal := args[2]
+
+		atom.Mu.Lock()
+		defer atom.Mu.Unlock()
+
+		if atom.Value == oldVal {
+			atom.Value = newVal
+			return &Boolean{Value: true}
+		}
+		return &Boolean{Value: false}
+	})
 }
 
 // RegisterBuiltin registers a new builtin function dynamically.

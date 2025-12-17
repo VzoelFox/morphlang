@@ -115,6 +115,14 @@ func (b *BooleanLiteral) expressionNode()      {}
 func (b *BooleanLiteral) TokenLiteral() string { return b.Token.Literal }
 func (b *BooleanLiteral) String() string       { return b.Token.Literal }
 
+type NullLiteral struct {
+	Token lexer.Token
+}
+
+func (n *NullLiteral) expressionNode()      {}
+func (n *NullLiteral) TokenLiteral() string { return n.Token.Literal }
+func (n *NullLiteral) String() string       { return n.Token.Literal }
+
 type ArrayLiteral struct {
 	Token    lexer.Token // '['
 	Elements []Expression

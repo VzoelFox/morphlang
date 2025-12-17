@@ -30,6 +30,7 @@ const (
 	THREAD_OBJ            = "THREAD"
 	TIME_OBJ              = "TIME"
 	MUTEX_OBJ             = "MUTEX"
+	ATOM_OBJ              = "ATOM"
 )
 
 type Object interface {
@@ -144,6 +145,21 @@ type Mutex struct {
 
 func (m *Mutex) Type() ObjectType { return MUTEX_OBJ }
 func (m *Mutex) Inspect() string  { return fmt.Sprintf("mutex[%p]", &m.Mu) }
+
+type Atom struct {
+	Value Object
+	Mu    sync.Mutex
+}
+
+func (a *Atom) Type() ObjectType { return ATOM_OBJ }
+func (a *Atom) Inspect() string {
+	a.Mu.Lock()
+	defer a.Mu.Unlock()
+	if a.Value != nil {
+		return fmt.Sprintf("atom[%s]", a.Value.Inspect())
+	}
+	return "atom[kosong]"
+}
 
 type BuiltinFunction func(args ...Object) Object
 

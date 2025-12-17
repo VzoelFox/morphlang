@@ -387,6 +387,9 @@ func (c *Compiler) Compile(node parser.Node) error {
 		boolean := &object.Boolean{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(boolean))
 
+	case *parser.NullLiteral:
+		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+
 	case *parser.StringLiteral:
 		str := &object.String{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(str))

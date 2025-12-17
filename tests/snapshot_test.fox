@@ -5,9 +5,7 @@ cetak("x awal: " + x)
 
 status = potret()
 
-t = tipe(status)
-
-jika t == "STRING"
+jika status != kosong
   cetak("SYSTEM: Pulih terdeteksi. Pesan: " + status)
   x = 10
 lainnya
@@ -30,7 +28,7 @@ x = 30
 simpan()
 cetak("x setelah simpan: " + x)
 
-# Bersihkan snapshot sisa dari tes pertama
+# Bersihkan snapshot sisa
 simpan()
 
 hasil = pulih("Coba lagi")
