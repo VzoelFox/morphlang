@@ -445,8 +445,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 		// 3. Emit Import and Binding
 		// c.emit(OpImport, modIdx)
-		c.emit(OpLoadConst, modIdx)
-		c.emit(OpCall, 0) // Pushes Module Hash (Return Value of Wrapper)
+		c.emit(OpClosure, modIdx, 0) // Wrap CompiledFunction in Closure
+		c.emit(OpCall, 0)            // Execute Module Wrapper
 
 		if len(node.Identifiers) == 0 {
 			// "ambil 'path'" -> bind whole module to name
@@ -748,7 +748,18 @@ func (c *Compiler) loadModule(path string) (int, error) {
 	}
 
 	wrapperConstIdx := int(ReadUint16(bc.Instructions[1:]))
-	// Return the remapped index of this constant
+
+	// Ensure NumLocals is set correctly for the wrapper function
+	// The wrapper function is the one at wrapperConstIdx (remapped)
+	// We need to access the object in c.constants and update it?
+	// No, bc.Constants[wrapperConstIdx] (old) -> newFn.
+	// But wait, wrapperConstIdx IS the index in `subComp` constants.
+	// `indexMap` maps it to `c` constants.
+
+	// The `CompiledFunction` created for wrapper in `subComp` has correct NumLocals (calculated by subComp).
+	// My loop "Remap Nested Functions" cloned it and copied NumLocals.
+	// So it SHOULD be correct.
+
 	return indexMap[wrapperConstIdx], nil
 }
 
