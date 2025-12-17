@@ -209,6 +209,10 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseImportStatement()
 	case lexer.DARI:
 		return p.parseFromImportStatement()
+	case lexer.BERHENTI:
+		return p.parseBreakStatement()
+	case lexer.LANJUT:
+		return p.parseContinueStatement()
 	default:
 		return p.parseExpressionOrAssignmentStatement()
 	}
@@ -227,6 +231,22 @@ func (p *Parser) parseImportStatement() *ImportStatement {
 		p.nextToken()
 	}
 
+	return stmt
+}
+
+func (p *Parser) parseBreakStatement() *BreakStatement {
+	stmt := &BreakStatement{Token: p.curToken}
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
+	}
+	return stmt
+}
+
+func (p *Parser) parseContinueStatement() *ContinueStatement {
+	stmt := &ContinueStatement{Token: p.curToken}
+	if p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken()
+	}
 	return stmt
 }
 

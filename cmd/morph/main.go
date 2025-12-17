@@ -143,6 +143,14 @@ func main() {
 		return
 	}
 
+	// Compilation Check (Ensure logic validity)
+	comp := compiler.New()
+	err = comp.Compile(program)
+	if err != nil {
+		fmt.Printf("Compilation failed:\n%s\n", err)
+		os.Exit(1)
+	}
+
 	if !*check {
 		fmt.Printf("Successfully compiled %s\n", filename)
 	}
