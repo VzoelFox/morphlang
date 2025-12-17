@@ -73,4 +73,35 @@ func init() {
 		}
 		return val
 	})
+
+	// mutex_baru() -> Mutex
+	RegisterBuiltin("mutex_baru", func(args ...Object) Object {
+		return &Mutex{}
+	})
+
+	// kunci(mutex) -> Null
+	RegisterBuiltin("kunci", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		mu, ok := args[0].(*Mutex)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument to `kunci` must be MUTEX, got %s", args[0].Type())}
+		}
+		mu.Mu.Lock()
+		return &Null{}
+	})
+
+	// buka(mutex) -> Null
+	RegisterBuiltin("buka", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		mu, ok := args[0].(*Mutex)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument to `buka` must be MUTEX, got %s", args[0].Type())}
+		}
+		mu.Mu.Unlock()
+		return &Null{}
+	})
 }

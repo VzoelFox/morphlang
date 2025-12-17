@@ -1,0 +1,27 @@
+ambil "cotc/scheduler"
+
+data = []
+i = 0
+selama i < 100
+  data = data + [i]
+  i = i + 1
+akhir
+
+fungsi kali_dua(x)
+  kembalikan x * 2
+akhir
+
+sched = scheduler.baru(data, 10)
+hasil = scheduler.jalankan(sched, kali_dua, 4)
+
+cetak("Hasil[0]: #{hasil[0]}")
+cetak("Hasil[99]: #{hasil[99]}")
+
+jika hasil[0] != 0
+  cetak("FAIL 0")
+akhir
+jika hasil[99] != 198
+  cetak("FAIL 99")
+akhir
+
+cetak("SUCCESS SCHEDULER")

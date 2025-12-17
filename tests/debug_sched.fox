@@ -1,0 +1,6 @@
+ambil "cotc/scheduler"
+data = [1, 2, 3]
+fungsi kali(x) kembalikan x * 2 akhir
+sched = scheduler.baru(data, 1)
+scheduler.pekerja_internal(sched, kali)
+cetak(sched.data)
