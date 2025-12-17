@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/VzoelFox/morphlang/pkg/parser"
@@ -28,6 +29,7 @@ const (
 	CHANNEL_OBJ           = "CHANNEL"
 	THREAD_OBJ            = "THREAD"
 	TIME_OBJ              = "TIME"
+	MUTEX_OBJ             = "MUTEX"
 )
 
 type Object interface {
@@ -136,6 +138,13 @@ type Time struct {
 func (t *Time) Type() ObjectType { return TIME_OBJ }
 func (t *Time) Inspect() string  { return t.Value.Format(time.RFC3339) }
 
+type Mutex struct {
+	Mu sync.Mutex
+}
+
+func (m *Mutex) Type() ObjectType { return MUTEX_OBJ }
+func (m *Mutex) Inspect() string  { return fmt.Sprintf("mutex[%p]", &m.Mu) }
+
 type BuiltinFunction func(args ...Object) Object
 
 type Builtin struct {
@@ -187,6 +196,7 @@ type CompiledFunction struct {
 	Instructions  []byte
 	NumLocals     int
 	NumParameters int
+	GlobalNames   []string
 }
 
 func (cf *CompiledFunction) Type() ObjectType { return COMPILED_FUNCTION_OBJ }

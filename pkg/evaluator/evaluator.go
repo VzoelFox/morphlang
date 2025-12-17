@@ -31,7 +31,13 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 	case *parser.AssignmentStatement:
 		val := Eval(node.Value, env)
 		// Error as Value: we allow assigning Error objects to variables
-		env.Set(node.Name.Value, val)
+
+		switch name := node.Name.(type) {
+		case *parser.Identifier:
+			env.Set(name.Value, val)
+		default:
+			return newError(node.Name, "assignment not supported in evaluator for %T", node.Name)
+		}
 
 		// We return NULL to indicate the statement executed successfully (even if the assigned value is an error).
 		// This prevents the main evaluation loop from aborting execution when a variable is assigned an error value,

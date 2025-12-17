@@ -32,6 +32,24 @@ var Builtins = []BuiltinDef{
 		}},
 	},
 	{
+		"kunci",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			hash, ok := args[0].(*Hash)
+			if !ok {
+				return &Error{Message: fmt.Sprintf("argument to `kunci` must be HASH, got %s", args[0].Type())}
+			}
+
+			elements := make([]Object, 0, len(hash.Pairs))
+			for _, pair := range hash.Pairs {
+				elements = append(elements, pair.Key)
+			}
+			return &Array{Elements: elements}
+		}},
+	},
+	{
 		"cetak",
 		&Builtin{Fn: func(args ...Object) Object {
 			for _, arg := range args {
