@@ -252,8 +252,6 @@ func (p *Parser) parseFromImportStatement() *ImportStatement {
 	if p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken()
 	}
-
-	return stmt
 }
 
 func (p *Parser) parseReturnStatement() *ReturnStatement {
