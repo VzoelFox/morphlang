@@ -73,3 +73,21 @@ func TestConcurrencyComplexTypes(t *testing.T) {
 	}
 	runVmTests(t, tests)
 }
+
+func TestConcurrencyJoin(t *testing.T) {
+	tests := []vmTestCase{
+		{
+			input: `
+			ch = saluran_baru(0)
+			t = luncurkan(fungsi()
+				kirim(ch, 100)
+				kembalikan "selesai"
+			akhir)
+			terima(ch)
+			tunggu(t)
+			`,
+			expected: "selesai",
+		},
+	}
+	runVmTests(t, tests)
+}

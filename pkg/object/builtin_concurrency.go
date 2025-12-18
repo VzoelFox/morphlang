@@ -48,13 +48,13 @@ func init() {
 		return NewError("luncurkan() requires VM context", ErrCodeRuntime, 0, 0)
 	})
 
-	RegisterBuiltin("gabung", func(args ...Object) Object {
+	RegisterBuiltin("tunggu", func(args ...Object) Object {
 		if len(args) != 1 {
 			return newArgumentError(len(args), 1)
 		}
 		threadObj, ok := args[0].(*Thread)
 		if !ok {
-			return NewError(fmt.Sprintf("argument to `gabung` must be THREAD, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
+			return NewError(fmt.Sprintf("argument to `tunggu` must be THREAD, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		val, ok := <-threadObj.Result

@@ -232,13 +232,21 @@ func (vm *VM) Run() (err error) {
 			returnValue, err := vm.pop()
 			if err != nil { return err }
 			frame := vm.popFrame()
-			vm.sp = frame.basePointer - 1
+			if vm.framesIndex == 0 {
+				vm.sp = 0
+			} else {
+				vm.sp = frame.basePointer - 1
+			}
 			if err := vm.push(returnValue); err != nil { return err }
 			if vm.framesIndex == 0 { return nil }
 
 		case compiler.OpReturn:
 			frame := vm.popFrame()
-			vm.sp = frame.basePointer - 1
+			if vm.framesIndex == 0 {
+				vm.sp = 0
+			} else {
+				vm.sp = frame.basePointer - 1
+			}
 			if err := vm.push(NullPtr); err != nil { return err }
 			if vm.framesIndex == 0 { return nil }
 
@@ -462,8 +470,9 @@ func executeTask(ptr memory.Ptr) {
 	if err != nil {
 		ctx.ResultCh <- object.NewError(err.Error(), "", 0, 0)
 	} else {
-		if newVM.LastPoppedStackElem != nil {
-			ctx.ResultCh <- newVM.LastPoppedStackElem
+		val := newVM.StackTop()
+		if val != nil {
+			ctx.ResultCh <- val
 		} else {
 			ctx.ResultCh <- Null
 		}
