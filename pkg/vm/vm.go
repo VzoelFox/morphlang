@@ -3,10 +3,12 @@ package vm
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/VzoelFox/morphlang/pkg/compiler"
 	"github.com/VzoelFox/morphlang/pkg/memory"
 	"github.com/VzoelFox/morphlang/pkg/object"
+	"github.com/VzoelFox/morphlang/pkg/scheduler"
 )
 
 const StackSize = 2048
@@ -18,7 +20,17 @@ var (
 	False         = &object.Boolean{Value: false}
 	Null          = &object.Null{}
 	bootstrapOnce sync.Once
+	schedulerOnce sync.Once
+	taskRegistry  sync.Map
+	taskIDGen     int64
 )
+
+type TaskContext struct {
+	Closure   *object.Closure
+	Globals   []object.Object
+	Constants []object.Object
+	ResultCh  chan object.Object
+}
 
 type VMSnapshot struct {
 	Stack       []object.Object
@@ -73,6 +85,12 @@ func New(bytecode *compiler.Bytecode) *VM {
 			ptr, _ := memory.AllocBoolean(false)
 			False.Address = ptr
 		}
+	})
+
+	// Phase X: Init Global Scheduler
+	schedulerOnce.Do(func() {
+		// 4 Workers
+		scheduler.Init(4, executeTask)
 	})
 
 	// Acquire Drawer 0 for Main Thread (Simulation)
@@ -553,43 +571,82 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 		return nil, fmt.Errorf("luncurkan function must accept 0 arguments")
 	}
 
-	// Create new VM with ISOLATED globals (Copy-on-Spawn)
-	// This ensures that variable modifications in the thread do not affect the parent.
-	frames := make([]*Frame, MaxFrames)
-	frames[0] = NewFrame(cl, 0)
-
+	// Prepare Task Context
+	taskID := atomic.AddInt64(&taskIDGen, 1)
 	newGlobals := make([]object.Object, len(vm.globals))
 	copy(newGlobals, vm.globals)
+	resultCh := make(chan object.Object, 1)
+
+	ctx := TaskContext{
+		Closure:   cl,
+		Globals:   newGlobals,
+		Constants: vm.constants,
+		ResultCh:  resultCh,
+	}
+	taskRegistry.Store(taskID, ctx)
+
+	// Alloc TaskID in Memory (Hybrid)
+	ptr, err := memory.AllocInteger(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Submit to Scheduler
+	err = scheduler.Submit(ptr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &object.Thread{Result: resultCh}, nil
+}
+
+func executeTask(ptr memory.Ptr) {
+	// 1. Read TaskID
+	id, err := memory.ReadInteger(ptr)
+	if err != nil {
+		fmt.Printf("Scheduler Error: Failed to read TaskID: %v\n", err)
+		return
+	}
+
+	// 2. Retrieve Context
+	val, ok := taskRegistry.Load(id)
+	if !ok {
+		fmt.Printf("Scheduler Error: TaskID %d not found in registry\n", id)
+		return
+	}
+	taskRegistry.Delete(id)
+	ctx := val.(TaskContext)
+
+	// 3. Setup VM
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = NewFrame(ctx.Closure, 0)
 
 	newVM := &VM{
-		constants:   vm.constants,
-		globals:     newGlobals,
+		constants:   ctx.Constants,
+		globals:     ctx.Globals,
 		stack:       [StackSize]object.Object{},
-		sp:          cl.Fn.NumLocals, // Reserve space for locals on the stack
+		sp:          ctx.Closure.Fn.NumLocals,
 		frames:      frames,
 		framesIndex: 1,
 		snapshots:   make([]VMSnapshot, 0),
+		// Note: Cabinet is global (Lemari)
+		// Drawer? Each thread needs a drawer?
+		// Currently Alloc uses ActiveDrawerIndex from Cabinet (Global Lock).
+		// So threads share drawers via global lock. This is safe (locked).
 	}
 
-	resultCh := make(chan object.Object, 1)
-
-	go func() {
-		err := newVM.Run()
-		if err != nil {
-			// If run fails, send error
-			resultCh <- &object.Error{Message: fmt.Sprintf("Background task error: %v", err)}
+	// 4. Run
+	err = newVM.Run()
+	if err != nil {
+		ctx.ResultCh <- &object.Error{Message: fmt.Sprintf("Background task error: %v", err)}
+	} else {
+		if newVM.LastPoppedStackElem != nil {
+			ctx.ResultCh <- newVM.LastPoppedStackElem
 		} else {
-			// If run succeeds, send last popped element (return value) or Null
-			if newVM.LastPoppedStackElem != nil {
-				resultCh <- newVM.LastPoppedStackElem
-			} else {
-				resultCh <- Null
-			}
+			ctx.ResultCh <- Null
 		}
-		close(resultCh)
-	}()
-
-	return &object.Thread{Result: resultCh}, nil
+	}
+	close(ctx.ResultCh)
 }
 
 func (vm *VM) push(o object.Object) error {
