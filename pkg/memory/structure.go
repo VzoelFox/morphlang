@@ -1,6 +1,9 @@
 package memory
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // Constants for sizing
 const (
@@ -101,6 +104,10 @@ func InitCabinet() {
 	}
 
 	Lemari.ActiveDrawerIndex = 0
+
+	// Start Background GC (Daemon)
+	// Runs every 1 second to apply aging and free up slots.
+	StartGC(1 * time.Second)
 }
 
 // CreateDrawer creates a new virtual drawer and tries to assign a physical slot
