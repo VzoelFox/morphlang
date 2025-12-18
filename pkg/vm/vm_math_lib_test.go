@@ -22,11 +22,11 @@ func TestMathBuiltins(t *testing.T) {
 		},
 		{
 			input: `pow(2, 3)`,
-			expected: 8,
+			expected: 8.0,
 		},
 		{
 			input: `sqrt(16)`,
-			expected: 4,
+			expected: 4.0,
 		},
 	}
 
@@ -41,7 +41,7 @@ func TestMathBuiltinsErrors(t *testing.T) {
 		},
 		{
 			input: `pow(2, "3")`,
-			expected: &object.Error{Message: "second argument to `pow` must be INTEGER, got STRING"},
+			expected: &object.Error{Message: "second argument to `pow` must be INTEGER or FLOAT, got STRING"},
 		},
 	}
 
