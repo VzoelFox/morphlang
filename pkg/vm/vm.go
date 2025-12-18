@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/VzoelFox/morphlang/pkg/compiler"
+	"github.com/VzoelFox/morphlang/pkg/memory"
 	"github.com/VzoelFox/morphlang/pkg/object"
 )
 
@@ -38,6 +39,10 @@ type VM struct {
 	LastPoppedStackElem object.Object
 
 	snapshots []VMSnapshot
+
+	// Phase X: Memory Integration
+	Cabinet *memory.Cabinet
+	Drawer  *memory.Drawer
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -48,6 +53,16 @@ func New(bytecode *compiler.Bytecode) *VM {
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
 
+	// Phase X: Init Global Cabinet if needed
+	// Note: This is a simplified "Single Tenant" simulation.
+	// In real OS, Cabinet is pre-initialized.
+	// We check if Drawers exist to know if init is needed.
+	if len(memory.Lemari.Drawers) == 0 {
+		memory.InitCabinet()
+	}
+	// Acquire Drawer 0 for Main Thread (Simulation)
+	drawer := &memory.Lemari.Drawers[0]
+
 	return &VM{
 		constants:   bytecode.Constants,
 		globals:     make([]object.Object, GlobalSize),
@@ -56,6 +71,8 @@ func New(bytecode *compiler.Bytecode) *VM {
 		frames:      frames,
 		framesIndex: 1,
 		snapshots:   make([]VMSnapshot, 0),
+		Cabinet:     &memory.Lemari,
+		Drawer:      drawer,
 	}
 }
 
@@ -85,7 +102,37 @@ func (vm *VM) StackTop() object.Object {
 	return vm.stack[vm.sp-1]
 }
 
-func (vm *VM) Run() error {
+func (vm *VM) DumpState() {
+	fmt.Printf("\n=== VM MONITOR CRASH DUMP ===\n")
+	if vm.framesIndex > 0 {
+		frame := vm.currentFrame()
+		fmt.Printf("IP: %d\n", frame.ip)
+		fmt.Printf("Function Locals: %d\n", frame.cl.Fn.NumLocals)
+	}
+	fmt.Printf("Stack Pointer: %d\n", vm.sp)
+	if vm.sp > 0 {
+		top := vm.StackTop()
+		if top != nil {
+			fmt.Printf("Stack Top: %s (Type: %s)\n", top.Inspect(), top.Type())
+		} else {
+			fmt.Printf("Stack Top: nil\n")
+		}
+	}
+	if vm.Drawer != nil {
+		fmt.Printf("Drawer ID: %d (Physical Slot: %d)\n", vm.Drawer.ID, vm.Drawer.PhysicalSlot)
+	}
+	fmt.Printf("=============================\n")
+}
+
+func (vm *VM) Run() (err error) {
+	// VM Monitor: Panic Recovery
+	defer func() {
+		if r := recover(); r != nil {
+			vm.DumpState()
+			err = fmt.Errorf("VM CRASH (Monitor Recovered): %v", r)
+		}
+	}()
+
 	var ip int
 	var ins compiler.Instructions
 	var op compiler.Opcode
@@ -676,6 +723,14 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 		result = leftVal / rightVal
 	default:
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown integer operator: %d", op)})
+	}
+
+	// Phase X: Allocate in Custom Memory
+	// Hybrid: We create the Go Object, but we ALSO write to the Drawer to prove integration.
+	// In the future, we will return a Pointer wrapper.
+	_, allocErr := memory.AllocInteger(result)
+	if allocErr != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
 	}
 
 	return vm.push(&object.Integer{Value: result})

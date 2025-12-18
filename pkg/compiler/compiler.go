@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/VzoelFox/morphlang/pkg/analysis"
 	"github.com/VzoelFox/morphlang/pkg/lexer"
 	"github.com/VzoelFox/morphlang/pkg/object"
 	"github.com/VzoelFox/morphlang/pkg/parser"
@@ -38,6 +39,11 @@ type Compiler struct {
 	symbolTable         *SymbolTable
 	scopes              []CompilationScope
 	scopeIndex          int
+
+	// Safe Mode (Analyzer Integration)
+	Input    string
+	Filename string
+	analyzed bool
 }
 
 func New() *Compiler {
@@ -56,7 +62,26 @@ func New() *Compiler {
 	}
 }
 
+func (c *Compiler) SetSource(filename, input string) {
+	c.Filename = filename
+	c.Input = input
+}
+
 func (c *Compiler) Compile(node parser.Node) error {
+	// Safety Check (Safe Mode)
+	if c.Input != "" && !c.analyzed {
+		c.analyzed = true
+		if prog, ok := node.(*parser.Program); ok {
+			// Run Analyzer
+			// We pass empty parser errors because we assume parser succeeded if we are here.
+			ctx, _ := analysis.GenerateContext(prog, c.Filename, c.Input, []parser.ParserError{})
+			// If context has errors (semantic errors), abort.
+			if len(ctx.Errors) > 0 {
+				return fmt.Errorf("safety check failed: %s", ctx.Errors[0].Message)
+			}
+		}
+	}
+
 	switch node := node.(type) {
 	case *parser.Program:
 		for _, s := range node.Statements {
