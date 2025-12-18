@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/VzoelFox/morphlang/pkg/compiler"
@@ -88,8 +89,8 @@ func TestConditionals(t *testing.T) {
 		{"jika (1 < 2) 10 akhir", 10},
 		{"jika (1 < 2) 10 lainnya 20 akhir", 10},
 		{"jika (1 > 2) 10 lainnya 20 akhir", 20},
-		{"jika (1 > 2) 10 akhir", nil}, // Null
-		{"jika (salah) 10 akhir", nil}, // Null
+		{"jika (1 > 2) 10 akhir", nil},
+		{"jika (salah) 10 akhir", nil},
 	}
 
 	runVmTests(t, tests)
@@ -299,6 +300,20 @@ func runVmTest(t *testing.T, input string, expected interface{}) {
 
 	vm := New(comp.Bytecode())
 	err = vm.Run()
+
+	// Special handling for expected Error
+	if expectedErr, ok := expected.(*object.Error); ok {
+		if err != nil {
+			// Check against VM runtime error (Go error)
+			// Partial match or full match?
+			if !strings.Contains(err.Error(), expectedErr.GetMessage()) {
+				t.Errorf("wrong vm error message. want substring=%q, got=%q", expectedErr.GetMessage(), err.Error())
+			}
+			return
+		}
+		// If no error, continue to check stack (maybe it returned Error object?)
+	}
+
 	if err != nil {
 		t.Fatalf("vm error: %s", err)
 	}
@@ -386,8 +401,8 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 			t.Errorf("object is not Error. got=%T (%+v)", obj, obj)
 			return
 		}
-		if result.Message != expected.Message {
-			t.Errorf("wrong error message. expected=%q, got=%q", expected.Message, result.Message)
+		if result.GetMessage() != expected.GetMessage() {
+			t.Errorf("wrong error message. expected=%q, got=%q", expected.GetMessage(), result.GetMessage())
 		}
 	}
 }

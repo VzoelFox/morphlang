@@ -62,7 +62,6 @@ type VM struct {
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
-	// Initialize Globals lazily if not set
 	if True == nil {
 		True = object.NewBoolean(true)
 		False = object.NewBoolean(false)
@@ -75,7 +74,6 @@ func New(bytecode *compiler.Bytecode) *VM {
 	}
 	mainFn := &object.CompiledFunction{Address: ptr}
 
-	// Create Main Closure
 	closurePtr, err := memory.AllocClosure(mainFn.Address, []memory.Ptr{})
 	if err != nil { panic(err) }
 	mainClosure := &object.Closure{Address: closurePtr}
@@ -149,7 +147,6 @@ func (vm *VM) DumpState() {
 	if vm.framesIndex > 0 {
 		frame := vm.currentFrame()
 		fmt.Printf("IP: %d\n", frame.ip)
-		// Fix: Use method
 		fmt.Printf("Function Locals: %d\n", frame.cl.Fn().NumLocals())
 	}
 	fmt.Printf("Stack Pointer: %d\n", vm.sp)
@@ -190,7 +187,7 @@ func (vm *VM) Run() (err error) {
 			if _, err := vm.pop(); err != nil { return err }
 
 		case compiler.OpDup:
-			top := vm.stack[vm.sp-1] // Unsafe peek
+			top := vm.stack[vm.sp-1]
 			if err := vm.push(top); err != nil { return err }
 
 		case compiler.OpStoreGlobal:
@@ -237,11 +234,13 @@ func (vm *VM) Run() (err error) {
 			frame := vm.popFrame()
 			vm.sp = frame.basePointer - 1
 			if err := vm.push(returnValue); err != nil { return err }
+			if vm.framesIndex == 0 { return nil }
 
 		case compiler.OpReturn:
 			frame := vm.popFrame()
 			vm.sp = frame.basePointer - 1
 			if err := vm.push(NullPtr); err != nil { return err }
+			if vm.framesIndex == 0 { return nil }
 
 		case compiler.OpClosure:
 			constIndex := compiler.ReadUint16(ins[ip+1:])
@@ -253,7 +252,6 @@ func (vm *VM) Run() (err error) {
 			freeIndex := int(ins[ip+1])
 			vm.currentFrame().ip += 1
 			currentClosure := vm.currentFrame().cl
-			// Fix: Access via method
 			obj := currentClosure.FreeVariables()[freeIndex]
 			if err := ensureOnHeap(obj); err != nil { return err }
 			if err := vm.push(getObjectAddress(obj)); err != nil { return err }
@@ -261,14 +259,18 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpArray:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
-			if err := vm.buildArray(vm.sp-numElements, vm.sp); err != nil { return err }
+			ptr, err := vm.buildArray(vm.sp-numElements, vm.sp)
+			if err != nil { return err }
 			vm.sp -= numElements
+			if err := vm.push(ptr); err != nil { return err }
 
 		case compiler.OpHash:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
-			if err := vm.buildHash(vm.sp-numElements, vm.sp); err != nil { return err }
+			ptr, err := vm.buildHash(vm.sp-numElements, vm.sp)
+			if err != nil { return err }
 			vm.sp -= numElements
+			if err := vm.push(ptr); err != nil { return err }
 
 		case compiler.OpIndex:
 			index, err := vm.pop()
@@ -301,8 +303,21 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpAnd, compiler.OpOr, compiler.OpXor, compiler.OpLShift, compiler.OpRShift:
 			if err := vm.executeBitwiseOperation(op); err != nil { return err }
 
+		case compiler.OpJump:
+			pos := int(compiler.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip = pos - 1
+
+		case compiler.OpJumpNotTruthy:
+			pos := int(compiler.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
+			condition, err := vm.pop()
+			if err != nil { return err }
+			if !isTruthy(condition) {
+				vm.currentFrame().ip = pos - 1
+			}
+
 		default:
-			// return fmt.Errorf("unknown opcode %d", op)
+			return fmt.Errorf("unknown opcode %d", op)
 		}
 	}
 	return nil
@@ -333,7 +348,6 @@ func (vm *VM) pushClosure(constIndex int, numFree int) error {
 	fn := constant.(*object.CompiledFunction)
 
 	freeVars := make([]memory.Ptr, numFree)
-	// We don't need freeObjs list here, just Ptrs
 	for i := 0; i < numFree; i++ {
 		ptr := vm.stack[vm.sp-numFree+i]
 		freeVars[i] = ptr
@@ -353,7 +367,6 @@ func (vm *VM) executeCall(numArgs int) error {
 	if err != nil { return err }
 
 	if header.Type == memory.TagClosure {
-		// Use wrapper to get details
 		clWrapper := &object.Closure{Address: calleePtr}
 		fnWrapper := clWrapper.Fn()
 
@@ -375,7 +388,6 @@ func (vm *VM) executeCall(numArgs int) error {
 }
 
 func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
-	// Rehydrate to get Builtin Wrapper with Fn
 	builtinObj, _ := Rehydrate(builtinPtr)
 	builtin := builtinObj.(*object.Builtin)
 
@@ -388,10 +400,10 @@ func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
 	res := builtin.Fn(args...)
 
 	if errObj, ok := res.(*object.Error); ok {
-		if errObj.Message == "luncurkan() requires VM context" {
+		if errObj.GetMessage() == "luncurkan() requires VM context" {
 			tObj, err := vm.spawn(args)
 			if err != nil {
-				res = &object.Error{Message: err.Error()}
+				res = object.NewError(err.Error(), "", 0, 0)
 			} else {
 				res = tObj
 			}
@@ -449,7 +461,7 @@ func executeTask(ptr memory.Ptr) {
 
 	err := newVM.Run()
 	if err != nil {
-		ctx.ResultCh <- &object.Error{Message: err.Error()}
+		ctx.ResultCh <- object.NewError(err.Error(), "", 0, 0)
 	} else {
 		if newVM.LastPoppedStackElem != nil {
 			ctx.ResultCh <- newVM.LastPoppedStackElem

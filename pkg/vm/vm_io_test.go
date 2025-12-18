@@ -32,7 +32,7 @@ func TestIOErrors(t *testing.T) {
 	tests := []vmTestCase{
 		{
 			input: `baca_file("non_existent_file.txt")`,
-			expected: &object.Error{Message: "baca_file error: open non_existent_file.txt: no such file or directory"},
+			expected: object.NewError("baca_file error: open non_existent_file.txt: no such file or directory", "", 0, 0),
 		},
 	}
 

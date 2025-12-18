@@ -13,16 +13,16 @@ import (
 
 func newArgumentError(got int, expected int) *Error {
 	if got < expected {
-		return &Error{Code: ErrCodeMissingArgs, Message: fmt.Sprintf("argument mismatch: expected %d, got %d", expected, got)}
+		return NewError(fmt.Sprintf("argument mismatch: expected %d, got %d", expected, got), ErrCodeMissingArgs, 0, 0)
 	}
-	return &Error{Code: ErrCodeTooManyArgs, Message: fmt.Sprintf("argument mismatch: expected %d, got %d", expected, got)}
+	return NewError(fmt.Sprintf("argument mismatch: expected %d, got %d", expected, got), ErrCodeTooManyArgs, 0, 0)
 }
 
 func newArgumentErrorRange(got int, min int, max int) *Error {
 	if got < min {
-		return &Error{Code: ErrCodeMissingArgs, Message: fmt.Sprintf("argument mismatch: expected %d or %d, got %d", min, max, got)}
+		return NewError(fmt.Sprintf("argument mismatch: expected %d or %d, got %d", min, max, got), ErrCodeMissingArgs, 0, 0)
 	}
-	return &Error{Code: ErrCodeTooManyArgs, Message: fmt.Sprintf("argument mismatch: expected %d or %d, got %d", min, max, got)}
+	return NewError(fmt.Sprintf("argument mismatch: expected %d or %d, got %d", min, max, got), ErrCodeTooManyArgs, 0, 0)
 }
 
 type BuiltinDef struct {
@@ -40,13 +40,13 @@ func init() {
 		switch arg := args[0].(type) {
 		case *Array:
 			len, err := memory.ReadArrayLength(arg.Address)
-			if err != nil { return &Error{Message: err.Error()} }
+			if err != nil { return NewError(err.Error(), ErrCodeRuntime, 0, 0) }
 			return NewInteger(int64(len))
 		case *String:
 			val := arg.GetValue()
 			return NewInteger(int64(len(val)))
 		default:
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `panjang` not supported, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `panjang` not supported, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 	})
 
@@ -56,7 +56,7 @@ func init() {
 		}
 		hash, ok := args[0].(*Hash)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `kunci` must be HASH, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `kunci` must be HASH, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		pairs := hash.GetPairs()
@@ -87,9 +87,9 @@ func init() {
 		}
 		switch arg := args[0].(type) {
 		case *String:
-			return &Error{Message: arg.GetValue()}
+			return NewError(arg.GetValue(), "", 0, 0)
 		default:
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `galat` must be STRING, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `galat` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 	})
 
@@ -111,9 +111,9 @@ func init() {
 		}
 		switch arg := args[0].(type) {
 		case *Error:
-			return NewString(arg.Message)
+			return NewString(arg.GetMessage())
 		default:
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `pesan_galat` must be ERROR, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `pesan_galat` must be ERROR, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 	})
 
@@ -123,12 +123,12 @@ func init() {
 		}
 		path, ok := args[0].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `baca_file` must be STRING, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `baca_file` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		content, err := os.ReadFile(path.GetValue())
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: fmt.Sprintf("baca_file error: %s", err.Error())}
+			return NewError(fmt.Sprintf("baca_file error: %s", err.Error()), ErrCodeRuntime, 0, 0)
 		}
 		return NewString(string(content))
 	})
@@ -139,16 +139,16 @@ func init() {
 		}
 		path, ok := args[0].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `tulis_file` must be STRING, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `tulis_file` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		content, ok := args[1].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `tulis_file` must be STRING, got %s", args[1].Type())}
+			return NewError(fmt.Sprintf("second argument to `tulis_file` must be STRING, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		err := os.WriteFile(path.GetValue(), []byte(content.GetValue()), 0644)
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: fmt.Sprintf("tulis_file error: %s", err.Error())}
+			return NewError(fmt.Sprintf("tulis_file error: %s", err.Error()), ErrCodeRuntime, 0, 0)
 		}
 		return NewNull()
 	})
@@ -159,11 +159,11 @@ func init() {
 		}
 		path, ok := args[0].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `buka_file` must be STRING, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `buka_file` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		mode, ok := args[1].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `buka_file` must be STRING, got %s", args[1].Type())}
+			return NewError(fmt.Sprintf("second argument to `buka_file` must be STRING, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		pathVal := path.GetValue()
@@ -179,12 +179,12 @@ func init() {
 		case "t+":
 			flag = os.O_WRONLY | os.O_CREATE | os.O_APPEND
 		default:
-			return &Error{Code: ErrCodeTypeMismatch, Message: "unknown file mode: " + modeVal}
+			return NewError("unknown file mode: "+modeVal, ErrCodeTypeMismatch, 0, 0)
 		}
 
 		f, err := os.OpenFile(pathVal, flag, 0644)
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: "failed to open file: " + err.Error()}
+			return NewError("failed to open file: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
 		return &File{File: f, Mode: modeVal}
 	})
@@ -195,11 +195,11 @@ func init() {
 		}
 		f, ok := args[0].(*File)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `tutup_file` must be FILE, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `tutup_file` must be FILE, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		err := f.File.Close()
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: "failed to close file: " + err.Error()}
+			return NewError("failed to close file: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
 		return NewNull()
 	})
@@ -210,14 +210,14 @@ func init() {
 		}
 		f, ok := args[0].(*File)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `baca` must be FILE, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `baca` must be FILE, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		var limit int64 = -1
 		if len(args) == 2 {
 			n, ok := args[1].(*Integer)
 			if !ok {
-				return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `baca` must be INTEGER, got %s", args[1].Type())}
+				return NewError(fmt.Sprintf("second argument to `baca` must be INTEGER, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 			}
 			limit = n.GetValue()
 		}
@@ -237,7 +237,7 @@ func init() {
 		}
 
 		if err != nil && err != io.EOF {
-			return &Error{Code: ErrCodeRuntime, Message: "baca error: " + err.Error()}
+			return NewError("baca error: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
 		return NewString(string(content))
 	})
@@ -248,7 +248,7 @@ func init() {
 		}
 		f, ok := args[0].(*File)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `tulis` must be FILE, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `tulis` must be FILE, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		var content []byte
@@ -260,7 +260,7 @@ func init() {
 
 		_, err := f.File.Write(content)
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: "tulis error: " + err.Error()}
+			return NewError("tulis error: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
 		return NewNull()
 	})
@@ -272,7 +272,7 @@ func init() {
 		if len(args) == 1 {
 			prompt, ok := args[0].(*String)
 			if !ok {
-				return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `input` must be STRING, got %s", args[0].Type())}
+				return NewError(fmt.Sprintf("argument to `input` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 			}
 			fmt.Print(prompt.GetValue())
 		}
@@ -280,7 +280,7 @@ func init() {
 		reader := bufio.NewReader(os.Stdin)
 		text, err := reader.ReadString('\n')
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: fmt.Sprintf("input error: %s", err.Error())}
+			return NewError(fmt.Sprintf("input error: %s", err.Error()), ErrCodeRuntime, 0, 0)
 		}
 		return NewString(strings.TrimSpace(text))
 	})
@@ -291,7 +291,7 @@ func init() {
 		}
 		str, ok := args[0].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `huruf_besar` must be STRING, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `huruf_besar` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		return NewString(strings.ToUpper(str.GetValue()))
 	})
@@ -302,7 +302,7 @@ func init() {
 		}
 		str, ok := args[0].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `huruf_kecil` must be STRING, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `huruf_kecil` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		return NewString(strings.ToLower(str.GetValue()))
 	})
@@ -313,11 +313,11 @@ func init() {
 		}
 		str, ok := args[0].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `pisah` must be STRING, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `pisah` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		delim, ok := args[1].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `pisah` must be STRING, got %s", args[1].Type())}
+			return NewError(fmt.Sprintf("second argument to `pisah` must be STRING, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		parts := strings.Split(str.GetValue(), delim.GetValue())
@@ -334,11 +334,11 @@ func init() {
 		}
 		arr, ok := args[0].(*Array)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `gabung` must be ARRAY, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `gabung` must be ARRAY, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		delim, ok := args[1].(*String)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `gabung` must be STRING, got %s", args[1].Type())}
+			return NewError(fmt.Sprintf("second argument to `gabung` must be STRING, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		len, _ := memory.ReadArrayLength(arr.Address)
@@ -348,7 +348,7 @@ func init() {
 			el := FromPtr(elPtr)
 			str, ok := el.(*String)
 			if !ok {
-				return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("array elements must be STRING, got %s", el.Type())}
+				return NewError(fmt.Sprintf("array elements must be STRING, got %s", el.Type()), ErrCodeTypeMismatch, 0, 0)
 			}
 			parts[i] = str.GetValue()
 		}
@@ -361,7 +361,7 @@ func init() {
 		}
 		num, ok := args[0].(*Integer)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `abs` must be INTEGER, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `abs` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		val := num.GetValue()
 		if val < 0 {
@@ -376,11 +376,11 @@ func init() {
 		}
 		a, ok := args[0].(*Integer)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `max` must be INTEGER, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `max` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		b, ok := args[1].(*Integer)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `max` must be INTEGER, got %s", args[1].Type())}
+			return NewError(fmt.Sprintf("second argument to `max` must be INTEGER, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		if a.GetValue() > b.GetValue() {
 			return a
@@ -394,11 +394,11 @@ func init() {
 		}
 		a, ok := args[0].(*Integer)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `min` must be INTEGER, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("first argument to `min` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		b, ok := args[1].(*Integer)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `min` must be INTEGER, got %s", args[1].Type())}
+			return NewError(fmt.Sprintf("second argument to `min` must be INTEGER, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 		if a.GetValue() < b.GetValue() {
 			return a
@@ -413,11 +413,11 @@ func init() {
 
 		xVal, err := getFloatValue(args[0])
 		if err != nil {
-			return &Error{Code: ErrCodeTypeMismatch, Message: "first argument to `pow` " + err.Error()}
+			return NewError("first argument to `pow` "+err.Error(), ErrCodeTypeMismatch, 0, 0)
 		}
 		yVal, err := getFloatValue(args[1])
 		if err != nil {
-			return &Error{Code: ErrCodeTypeMismatch, Message: "second argument to `pow` " + err.Error()}
+			return NewError("second argument to `pow` "+err.Error(), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		res := math.Pow(xVal, yVal)
@@ -431,11 +431,11 @@ func init() {
 
 		val, err := getFloatValue(args[0])
 		if err != nil {
-			return &Error{Code: ErrCodeTypeMismatch, Message: "argument to `sqrt` " + err.Error()}
+			return NewError("argument to `sqrt` "+err.Error(), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		if val < 0 {
-			return &Error{Code: ErrCodeRuntime, Message: "cannot calculate square root of negative number"}
+			return NewError("cannot calculate square root of negative number", ErrCodeRuntime, 0, 0)
 		}
 		res := math.Sqrt(val)
 		return NewFloat(res)
@@ -444,42 +444,42 @@ func init() {
 	RegisterBuiltin("sin", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		val, err := getFloatValue(args[0])
-		if err != nil { return &Error{Code: ErrCodeTypeMismatch, Message: "argument to `sin` " + err.Error()} }
+		if err != nil { return NewError("argument to `sin` "+err.Error(), ErrCodeTypeMismatch, 0, 0) }
 		return NewFloat(math.Sin(val))
 	})
 
 	RegisterBuiltin("cos", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		val, err := getFloatValue(args[0])
-		if err != nil { return &Error{Code: ErrCodeTypeMismatch, Message: "argument to `cos` " + err.Error()} }
+		if err != nil { return NewError("argument to `cos` "+err.Error(), ErrCodeTypeMismatch, 0, 0) }
 		return NewFloat(math.Cos(val))
 	})
 
 	RegisterBuiltin("tan", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		val, err := getFloatValue(args[0])
-		if err != nil { return &Error{Code: ErrCodeTypeMismatch, Message: "argument to `tan` " + err.Error()} }
+		if err != nil { return NewError("argument to `tan` "+err.Error(), ErrCodeTypeMismatch, 0, 0) }
 		return NewFloat(math.Tan(val))
 	})
 
 	RegisterBuiltin("asin", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		val, err := getFloatValue(args[0])
-		if err != nil { return &Error{Code: ErrCodeTypeMismatch, Message: "argument to `asin` " + err.Error()} }
+		if err != nil { return NewError("argument to `asin` "+err.Error(), ErrCodeTypeMismatch, 0, 0) }
 		return NewFloat(math.Asin(val))
 	})
 
 	RegisterBuiltin("acos", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		val, err := getFloatValue(args[0])
-		if err != nil { return &Error{Code: ErrCodeTypeMismatch, Message: "argument to `acos` " + err.Error()} }
+		if err != nil { return NewError("argument to `acos` "+err.Error(), ErrCodeTypeMismatch, 0, 0) }
 		return NewFloat(math.Acos(val))
 	})
 
 	RegisterBuiltin("atan", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		val, err := getFloatValue(args[0])
-		if err != nil { return &Error{Code: ErrCodeTypeMismatch, Message: "argument to `atan` " + err.Error()} }
+		if err != nil { return NewError("argument to `atan` "+err.Error(), ErrCodeTypeMismatch, 0, 0) }
 		return NewFloat(math.Atan(val))
 	})
 
@@ -487,7 +487,7 @@ func init() {
 		return NewFloat(math.Pi)
 	})
 
-	// Add others from init() here to merge
+	// ...
 	RegisterBuiltin("waktu_sekarang", func(args ...Object) Object {
 		return &Time{Value: time.Now()}
 	})
@@ -503,7 +503,7 @@ func init() {
 
 		ms, ok := args[0].(*Integer)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `tidur` must be INTEGER, got %s", args[0].Type())}
+			return NewError(fmt.Sprintf("argument to `tidur` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		time.Sleep(time.Duration(ms.GetValue()) * time.Millisecond)
@@ -513,9 +513,9 @@ func init() {
 	RegisterBuiltin("format_waktu", func(args ...Object) Object {
 		if len(args) != 2 { return newArgumentError(len(args), 2) }
 		tObj, ok := args[0].(*Time)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `format_waktu` must be TIME, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("first argument to `format_waktu` must be TIME, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 		formatObj, ok := args[1].(*String)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `format_waktu` must be STRING, got %s", args[1].Type())} }
+		if !ok { return NewError(fmt.Sprintf("second argument to `format_waktu` must be STRING, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0) }
 
 		layout := formatObj.GetValue()
 		switch layout {
@@ -528,7 +528,7 @@ func init() {
 	})
 
 	RegisterBuiltin("potret", func(args ...Object) Object {
-		return &Error{Message: "SIGNAL:SNAPSHOT"}
+		return NewError("SIGNAL:SNAPSHOT", "", 0, 0)
 	})
 
 	RegisterBuiltin("pulih", func(args ...Object) Object {
@@ -538,11 +538,11 @@ func init() {
 				msg = str.GetValue()
 			}
 		}
-		return &Error{Message: "SIGNAL:ROLLBACK:" + msg}
+		return NewError("SIGNAL:ROLLBACK:"+msg, "", 0, 0)
 	})
 
 	RegisterBuiltin("simpan", func(args ...Object) Object {
-		return &Error{Message: "SIGNAL:COMMIT"}
+		return NewError("SIGNAL:COMMIT", "", 0, 0)
 	})
 
 	RegisterBuiltin("atom_baru", func(args ...Object) Object {
@@ -553,7 +553,7 @@ func init() {
 	RegisterBuiltin("atom_baca", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		atom, ok := args[0].(*Atom)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument must be ATOM, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("argument must be ATOM, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 		atom.Mu.Lock()
 		defer atom.Mu.Unlock()
 		return atom.Value
@@ -562,7 +562,7 @@ func init() {
 	RegisterBuiltin("atom_tulis", func(args ...Object) Object {
 		if len(args) != 2 { return newArgumentError(len(args), 2) }
 		atom, ok := args[0].(*Atom)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument must be ATOM, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("first argument must be ATOM, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 		atom.Mu.Lock()
 		defer atom.Mu.Unlock()
 		atom.Value = args[1]
@@ -572,7 +572,7 @@ func init() {
 	RegisterBuiltin("atom_tukar", func(args ...Object) Object {
 		if len(args) != 3 { return newArgumentError(len(args), 3) }
 		atom, ok := args[0].(*Atom)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument must be ATOM, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("first argument must be ATOM, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 
 		oldVal := args[1]
 		newVal := args[2]
@@ -590,11 +590,11 @@ func init() {
 	RegisterBuiltin("alokasi", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		size, ok := args[0].(*Integer)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `alokasi` must be INTEGER, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("argument to `alokasi` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 
 		ptr, err := memory.Lemari.Alloc(int(size.GetValue()))
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: "allocation failed: " + err.Error()}
+			return NewError("allocation failed: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
 		return &Pointer{Address: uint64(ptr)}
 	})
@@ -602,19 +602,19 @@ func init() {
 	RegisterBuiltin("tulis_mem", func(args ...Object) Object {
 		if len(args) != 2 { return newArgumentError(len(args), 2) }
 		ptr, ok := args[0].(*Pointer)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `tulis_mem` must be POINTER, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("first argument to `tulis_mem` must be POINTER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 
 		var data []byte
 		switch val := args[1].(type) {
 		case *String:
 			data = []byte(val.GetValue())
 		default:
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `tulis_mem` must be STRING, got %s", args[1].Type())}
+			return NewError(fmt.Sprintf("second argument to `tulis_mem` must be STRING, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
 		err := memory.Write(memory.Ptr(ptr.Address), data)
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: "tulis_mem error: " + err.Error()}
+			return NewError("tulis_mem error: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
 		return NewNull()
 	})
@@ -622,13 +622,13 @@ func init() {
 	RegisterBuiltin("baca_mem", func(args ...Object) Object {
 		if len(args) != 2 { return newArgumentError(len(args), 2) }
 		ptr, ok := args[0].(*Pointer)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("first argument to `baca_mem` must be POINTER, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("first argument to `baca_mem` must be POINTER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 		size, ok := args[1].(*Integer)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("second argument to `baca_mem` must be INTEGER, got %s", args[1].Type())} }
+		if !ok { return NewError(fmt.Sprintf("second argument to `baca_mem` must be INTEGER, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0) }
 
 		data, err := memory.Read(memory.Ptr(ptr.Address), int(size.GetValue()))
 		if err != nil {
-			return &Error{Code: ErrCodeRuntime, Message: "baca_mem error: " + err.Error()}
+			return NewError("baca_mem error: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
 		return NewString(string(data))
 	})
@@ -636,17 +636,19 @@ func init() {
 	RegisterBuiltin("alamat", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		ptr, ok := args[0].(*Pointer)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `alamat` must be POINTER, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("argument to `alamat` must be POINTER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 		return NewInteger(int64(ptr.Address))
 	})
 
 	RegisterBuiltin("ptr_dari", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		addr, ok := args[0].(*Integer)
-		if !ok { return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `ptr_dari` must be INTEGER, got %s", args[0].Type())} }
+		if !ok { return NewError(fmt.Sprintf("argument to `ptr_dari` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 		return &Pointer{Address: uint64(addr.GetValue())}
 	})
 }
+
+// ...
 
 func getFloatValue(obj Object) (float64, error) {
 	switch val := obj.(type) {
@@ -659,7 +661,6 @@ func getFloatValue(obj Object) (float64, error) {
 	}
 }
 
-// ... RegisterBuiltin ...
 func RegisterBuiltin(name string, fn BuiltinFunction) {
 	for i, def := range Builtins {
 		if def.Name == name {
@@ -668,7 +669,8 @@ func RegisterBuiltin(name string, fn BuiltinFunction) {
 			composedFn := func(args ...Object) Object {
 				result := newFn(args...)
 				if err, ok := result.(*Error); ok {
-					if err.Code == ErrCodeMissingArgs || err.Code == ErrCodeTooManyArgs || err.Code == ErrCodeTypeMismatch {
+					code := err.GetCode()
+					if code == ErrCodeMissingArgs || code == ErrCodeTooManyArgs || code == ErrCodeTypeMismatch {
 						return originalFn(args...)
 					}
 				}

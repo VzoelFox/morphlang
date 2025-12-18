@@ -12,10 +12,9 @@ func init() {
 	RegisterBuiltin("info_memori", func(args ...Object) Object {
 		v, err := mem.VirtualMemory()
 		if err != nil {
-			return &Error{Message: fmt.Sprintf("gopsutil error: %v", err)}
+			return NewError(fmt.Sprintf("gopsutil error: %v", err), ErrCodeRuntime, 0, 0)
 		}
 
-		// Keys to export
 		data := map[string]int64{
 			"total":    int64(v.Total),
 			"terpakai": int64(v.Used),
@@ -35,7 +34,7 @@ func init() {
 	RegisterBuiltin("info_cpu", func(args ...Object) Object {
 		percentages, err := cpu.Percent(0, false)
 		if err != nil {
-			return &Error{Message: fmt.Sprintf("gopsutil error: %v", err)}
+			return NewError(fmt.Sprintf("gopsutil error: %v", err), ErrCodeRuntime, 0, 0)
 		}
 
 		if len(percentages) == 0 {

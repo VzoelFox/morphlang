@@ -53,6 +53,8 @@ func FromPtr(ptr memory.Ptr) Object {
 		}
 		// Return a new wrapper with Address and the Function pointer from registry
 		return &Builtin{Address: ptr, Fn: Builtins[idx].Builtin.Fn}
+	case memory.TagError:
+		return &Error{Address: ptr}
 	default:
 		// Fallback or Panic
 		panic(fmt.Sprintf("FromPtr: unknown type tag %d", header.Type))

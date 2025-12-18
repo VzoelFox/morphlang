@@ -15,8 +15,8 @@ func TestObjectInspect(t *testing.T) {
 		{NewString("Halo"), "Halo"},
 		{NewString(""), ""},
 		{NewString("Morph Language"), "Morph Language"},
-		{&Error{Message: "Salah"}, "Error di [:0:0]:\n  Salah\n"},
-		{&Error{Message: "Division by zero"}, "Error di [:0:0]:\n  Division by zero\n"},
+		{NewError("Salah", "", 0, 0), "Error di [:0:0]:\n  Salah\n"},
+		{NewError("Division by zero", "", 0, 0), "Error di [:0:0]:\n  Division by zero\n"},
 		{&ReturnValue{Value: NewInteger(5)}, "5"},
 		{&ReturnValue{Value: NewBoolean(true)}, "benar"},
 	}
@@ -37,7 +37,7 @@ func TestObjectType(t *testing.T) {
 		{NewBoolean(true), BOOLEAN_OBJ},
 		{NewNull(), NULL_OBJ},
 		{NewString("Halo"), STRING_OBJ},
-		{&Error{Message: "Err"}, ERROR_OBJ},
+		{NewError("Err", "", 0, 0), ERROR_OBJ},
 		{&ReturnValue{Value: NewInteger(5)}, RETURN_VALUE_OBJ},
 	}
 

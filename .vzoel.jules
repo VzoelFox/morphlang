@@ -2,7 +2,7 @@
   {
     "index": 0,
     "timestamp": "2025-12-18T17:20:49.058769813Z",
-    "user": "Setup Phase X Memory \u0026 Scheduler",
+    "user": "Setup Phase X Memory & Scheduler",
     "assistant": "Implemented LFU GC, Scheduler Queue, and Wiring. Memory upgraded to RWMutex. I/O aligned. Created pkg/agent to track this vision.",
     "context_hash": "",
     "prev_hash": "",
@@ -16,5 +16,14 @@
     "context_hash": "",
     "prev_hash": "30b484a5abdab212a3dd343aa807c3621c275fec817a3d247d92b1016b379e06",
     "hash": "a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef"
+  },
+  {
+    "index": 2,
+    "timestamp": "2025-12-18T21:00:00.000000000Z",
+    "user": "Fix VM crashes and stabilize Phase X.3",
+    "assistant": "Implemented missing VM opcodes (Jump, Minus, Bitwise). Fixed stack manipulation for Array/Hash/Call. Added Error object allocation in memory (TagError) and updated Builtins/Evaluator to use it. VM now passes integer/float/string arithmetic and flow control tests.",
+    "context_hash": "",
+    "prev_hash": "a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef",
+    "hash": "b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef1"
   }
 ]

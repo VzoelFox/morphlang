@@ -172,33 +172,54 @@ const (
 )
 
 type Error struct {
-	Message    string
-	Code       string
-	Line       int
-	Column     int
-	File       string
-	StackTrace []string
-	Hint       string
+	Address memory.Ptr
+}
+
+func NewError(msg string, code string, line, col int) *Error {
+	msgPtr, err := memory.AllocString(msg)
+	if err != nil { panic(err) }
+
+	var codePtr memory.Ptr = memory.NilPtr
+	if code != "" {
+		codePtr, err = memory.AllocString(code)
+		if err != nil { panic(err) }
+	}
+
+	ptr, err := memory.AllocError(msgPtr, codePtr, line, col)
+	if err != nil { panic(err) }
+
+	return &Error{Address: ptr}
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
+func (e *Error) GetAddress() memory.Ptr { return e.Address }
+
+func (e *Error) GetMessage() string {
+	msgPtr, _, _, _, _ := memory.ReadError(e.Address)
+	if msgPtr == memory.NilPtr { return "" }
+	val, _ := memory.ReadString(msgPtr)
+	return val
+}
+
+func (e *Error) GetCode() string {
+	_, codePtr, _, _, _ := memory.ReadError(e.Address)
+	if codePtr == memory.NilPtr { return "" }
+	val, _ := memory.ReadString(codePtr)
+	return val
+}
+
 func (e *Error) Inspect() string {
+	msg := e.GetMessage()
+	code := e.GetCode()
+	_, _, line, col, _ := memory.ReadError(e.Address)
+
 	var out bytes.Buffer
-	if e.Code != "" {
-		out.WriteString(fmt.Sprintf("Error [%s] di [%s:%d:%d]:\n", e.Code, e.File, e.Line, e.Column))
+	if code != "" {
+		out.WriteString(fmt.Sprintf("Error [%s] di [:%d:%d]:\n", code, line, col))
 	} else {
-		out.WriteString(fmt.Sprintf("Error di [%s:%d:%d]:\n", e.File, e.Line, e.Column))
+		out.WriteString(fmt.Sprintf("Error di [:%d:%d]:\n", line, col))
 	}
-	out.WriteString(fmt.Sprintf("  %s\n", e.Message))
-	if len(e.StackTrace) > 0 {
-		out.WriteString("\nStack trace:\n")
-		for _, trace := range e.StackTrace {
-			out.WriteString(fmt.Sprintf("  di %s\n", trace))
-		}
-	}
-	if e.Hint != "" {
-		out.WriteString(fmt.Sprintf("\nHint: %s", e.Hint))
-	}
+	out.WriteString(fmt.Sprintf("  %s\n", msg))
 	return out.String()
 }
 func (e *Error) GetAddress() memory.Ptr { return memory.NilPtr }

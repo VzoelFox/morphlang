@@ -24,7 +24,6 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 		return &object.ReturnValue{Value: val}
 	case *parser.AssignmentStatement:
 		val := Eval(node.Value, env)
-		// Error as Value: we allow assigning Error objects to variables
 
 		switch name := node.Name.(type) {
 		case *parser.Identifier:
@@ -33,7 +32,6 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 			return newError(node.Name, "assignment not supported in evaluator for %T", node.Name)
 		}
 
-		// We return NULL to indicate the statement executed successfully
 		return object.NewNull()
 
 	// Expressions
@@ -99,7 +97,6 @@ func evalExpressions(exps []parser.Expression, env *object.Environment) []object
 }
 
 func applyFunction(fn object.Object, args []object.Object) object.Object {
-	// Check for propagated error in arguments
 	if len(args) == 1 && isError(args[0]) {
 		if builtin, ok := fn.(*object.Builtin); ok {
 			return builtin.Fn(args...)
@@ -188,16 +185,9 @@ func evalInfixExpression(node parser.Node, operator string, left, right object.O
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
 		return evalStringInfixExpression(node, operator, left, right)
 	case operator == "==":
-		// Basic pointer equality fallback, but better to compare values if possible
-		// For primitives, we should compare values.
-		// However, nativeBoolToBooleanObject expects bool.
-		// If they are pointers to different addresses but same value?
-		// We should implement object.Equals?
-		// For now, assume strict check:
 		if left.Type() != right.Type() {
 			return object.NewBoolean(false)
 		}
-		// If Integer/String/Boolean, check value
 		switch l := left.(type) {
 		case *object.Integer:
 			r := right.(*object.Integer)
@@ -214,7 +204,6 @@ func evalInfixExpression(node parser.Node, operator string, left, right object.O
 			return object.NewBoolean(left == right)
 		}
 	case operator == "!=":
-		// Similar logic inverted
 		if left.Type() != right.Type() {
 			return object.NewBoolean(true)
 		}
@@ -286,10 +275,6 @@ func evalStringInfixExpression(node parser.Node, operator string, left, right ob
 }
 
 func evalBangOperatorExpression(right object.Object) object.Object {
-	// !true -> false
-	// !false -> true
-	// !null -> true
-	// !5 -> false
 	if isTruthy(right) {
 		return object.NewBoolean(false)
 	}
@@ -371,34 +356,31 @@ func nativeBoolToBooleanObject(input bool) *object.Boolean {
 
 func newError(node parser.Node, format string, a ...interface{}) *object.Error {
 	msg := fmt.Sprintf(format, a...)
-	err := &object.Error{
-		Message: msg,
-		File:    "unknown",
-		Line:    0,
-		Column:  0,
-	}
+
+	line := 0
+	col := 0
 
 	if node != nil {
 		switch n := node.(type) {
 		case *parser.Identifier:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.IntegerLiteral:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.BooleanLiteral:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.PrefixExpression:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.InfixExpression:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		}
 	}
 
-	return err
+	return object.NewError(msg, "", line, col)
 }
 
 func isError(obj object.Object) bool {

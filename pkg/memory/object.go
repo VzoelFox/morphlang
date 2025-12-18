@@ -19,6 +19,7 @@ const (
 	TagBuiltin TypeTag = 9
 	TagThread TypeTag = 10
 	TagHash    TypeTag = 11
+	TagError   TypeTag = 12
 	// ... add others later
 )
 
