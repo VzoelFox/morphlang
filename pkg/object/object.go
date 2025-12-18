@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ const (
 	TIME_OBJ              = "TIME"
 	MUTEX_OBJ             = "MUTEX"
 	ATOM_OBJ              = "ATOM"
+	FILE_OBJ              = "FILE"
 )
 
 type Object interface {
@@ -170,6 +172,16 @@ func (a *Atom) Inspect() string {
 		return fmt.Sprintf("atom[%s]", a.Value.Inspect())
 	}
 	return "atom[kosong]"
+}
+
+type File struct {
+	File *os.File
+	Mode string
+}
+
+func (f *File) Type() ObjectType { return FILE_OBJ }
+func (f *File) Inspect() string {
+	return fmt.Sprintf("file[%s]", f.File.Name())
 }
 
 type BuiltinFunction func(args ...Object) Object
