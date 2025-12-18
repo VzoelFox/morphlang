@@ -12,7 +12,7 @@ func init() {
 			if i, ok := args[0].(*Integer); ok {
 				buffer = int(i.Value)
 			} else {
-				return &Error{Message: "buffer size must be INTEGER"}
+				return &Error{Code: ErrCodeTypeMismatch, Message: "buffer size must be INTEGER"}
 			}
 		}
 		ch := make(chan Object, buffer)
@@ -22,11 +22,11 @@ func init() {
 	// kirim(saluran, nilai) -> Null
 	RegisterBuiltin("kirim", func(args ...Object) Object {
 		if len(args) != 2 {
-			return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
+			return newArgumentError(len(args), 2)
 		}
 		chObj, ok := args[0].(*Channel)
 		if !ok {
-			return &Error{Message: fmt.Sprintf("argument to `kirim` must be CHANNEL, got %s", args[0].Type())}
+			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `kirim` must be CHANNEL, got %s", args[0].Type())}
 		}
 
 		// Blocking send
@@ -37,11 +37,11 @@ func init() {
 	// terima(saluran) -> Object
 	RegisterBuiltin("terima", func(args ...Object) Object {
 		if len(args) != 1 {
-			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			return newArgumentError(len(args), 1)
 		}
 		chObj, ok := args[0].(*Channel)
 		if !ok {
-			return &Error{Message: fmt.Sprintf("argument to `terima` must be CHANNEL, got %s", args[0].Type())}
+			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `terima` must be CHANNEL, got %s", args[0].Type())}
 		}
 
 		// Blocking receive
@@ -52,17 +52,17 @@ func init() {
 	// luncurkan(fungsi) -> Null
 	// This is a placeholder. The actual implementation is intercepted by the VM.
 	RegisterBuiltin("luncurkan", func(args ...Object) Object {
-		return &Error{Message: "luncurkan() requires VM context"}
+		return &Error{Code: ErrCodeRuntime, Message: "luncurkan() requires VM context"}
 	})
 
 	// gabung(utas) -> Object
 	RegisterBuiltin("gabung", func(args ...Object) Object {
 		if len(args) != 1 {
-			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			return newArgumentError(len(args), 1)
 		}
 		threadObj, ok := args[0].(*Thread)
 		if !ok {
-			return &Error{Message: fmt.Sprintf("argument to `gabung` must be THREAD, got %s", args[0].Type())}
+			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `gabung` must be THREAD, got %s", args[0].Type())}
 		}
 
 		// Blocking wait
@@ -82,11 +82,11 @@ func init() {
 	// kunci(mutex) -> Null
 	RegisterBuiltin("kunci", func(args ...Object) Object {
 		if len(args) != 1 {
-			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			return newArgumentError(len(args), 1)
 		}
 		mu, ok := args[0].(*Mutex)
 		if !ok {
-			return &Error{Message: fmt.Sprintf("argument to `kunci` must be MUTEX, got %s", args[0].Type())}
+			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `kunci` must be MUTEX, got %s", args[0].Type())}
 		}
 		mu.Mu.Lock()
 		return &Null{}
@@ -95,11 +95,11 @@ func init() {
 	// buka(mutex) -> Null
 	RegisterBuiltin("buka", func(args ...Object) Object {
 		if len(args) != 1 {
-			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			return newArgumentError(len(args), 1)
 		}
 		mu, ok := args[0].(*Mutex)
 		if !ok {
-			return &Error{Message: fmt.Sprintf("argument to `buka` must be MUTEX, got %s", args[0].Type())}
+			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `buka` must be MUTEX, got %s", args[0].Type())}
 		}
 		mu.Mu.Unlock()
 		return &Null{}

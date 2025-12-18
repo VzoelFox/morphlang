@@ -855,14 +855,21 @@ func (c *Compiler) remapInstructions(ins []byte, indexMap map[int]int) {
 		op := Opcode(ins[offset])
 		def, err := Lookup(byte(op))
 		if err != nil {
-			// Should not happen if compiled correctly
-			return
+			offset++
+			continue
 		}
 
 		if op == OpLoadConst || op == OpClosure {
-			oldIdx := int(ReadUint16(ins[offset+1:]))
-			newIdx := indexMap[oldIdx]
-			binary.BigEndian.PutUint16(ins[offset+1:], uint16(newIdx))
+			// Safe operand reading
+			operands, _ := ReadOperands(def, ins[offset+1:])
+
+			// Verify operand width to prevent corruption
+			if len(def.OperandWidths) == 1 && def.OperandWidths[0] == 2 {
+				oldIdx := operands[0]
+				if newIdx, ok := indexMap[oldIdx]; ok {
+					binary.BigEndian.PutUint16(ins[offset+1:], uint16(newIdx))
+				}
+			}
 		}
 
 		offset += 1
