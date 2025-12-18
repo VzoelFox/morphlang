@@ -435,7 +435,7 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 	ptr, _ := memory.AllocInteger(taskID)
 	scheduler.Submit(ptr)
 
-	return &object.Thread{Result: resultCh}, nil
+	return object.NewThread(resultCh), nil
 }
 
 func executeTask(ptr memory.Ptr) {
@@ -448,7 +448,6 @@ func executeTask(ptr memory.Ptr) {
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = NewFrame(ctx.Closure, 0)
 
-	// Fix: Use method for NumLocals
 	newVM := &VM{
 		constants: ctx.Constants,
 		globals: ctx.Globals,

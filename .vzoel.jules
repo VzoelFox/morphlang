@@ -25,5 +25,14 @@
     "context_hash": "",
     "prev_hash": "a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef",
     "hash": "b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef1"
+  },
+  {
+    "index": 3,
+    "timestamp": "2025-12-18T22:00:00.000000000Z",
+    "user": "Implement Concurrency and I/O Strategy",
+    "assistant": "Implemented `AllocResource` and `TagResource` to support Host Resources (File, Channel, Thread) on Memory Stack. Updated `FromPtr` to hydrate resources via Registry. Implemented `TagPointer` and `AllocPointer` for manual memory access. Stabilized VM stack operations for Array/Hash. `pkg/evaluator` and `pkg/compiler` pass. `pkg/vm` passes Core tests, but some IO/Concurrency tests fail due to resource lookup or stack issues.",
+    "context_hash": "",
+    "prev_hash": "b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef1",
+    "hash": "c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef12"
   }
 ]

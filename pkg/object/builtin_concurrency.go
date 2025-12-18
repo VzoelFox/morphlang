@@ -15,7 +15,7 @@ func init() {
 			}
 		}
 		ch := make(chan Object, buffer)
-		return &Channel{Value: ch}
+		return NewChannel(ch)
 	})
 
 	RegisterBuiltin("kirim", func(args ...Object) Object {
@@ -65,7 +65,7 @@ func init() {
 	})
 
 	RegisterBuiltin("mutex_baru", func(args ...Object) Object {
-		return &Mutex{}
+		return NewMutex()
 	})
 
 	RegisterBuiltin("gembok", func(args ...Object) Object {

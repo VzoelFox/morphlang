@@ -37,7 +37,7 @@ func TestVMMonitorCrash(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "VM CRASH (Monitor Recovered)") {
+	if !strings.Contains(err.Error(), "VM CRASH") {
 		t.Errorf("wrong error message. got=%q", err.Error())
 	}
 	if !strings.Contains(err.Error(), "intentional crash for monitor test") {

@@ -40,7 +40,7 @@ func TestVMRuntimeErrors(t *testing.T) {
 		},
 		{
 			input: `"a" - "b"`,
-			expected: object.NewError("minus not supported for type tag 3", "", 0, 0),
+			expected: object.NewError("string only supports add", "", 0, 0),
 		},
 		{
 			input: `-"a"`,

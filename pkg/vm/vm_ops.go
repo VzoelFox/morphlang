@@ -40,9 +40,7 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		case compiler.OpAdd: res = leftVal + rightVal
 		case compiler.OpSub: res = leftVal - rightVal
 		case compiler.OpMul: res = leftVal * rightVal
-		case compiler.OpDiv:
-			if rightVal == 0 { return fmt.Errorf("integer divide by zero") }
-			res = leftVal / rightVal
+		case compiler.OpDiv: res = leftVal / rightVal
 		}
 		ptr, err := memory.AllocFloat(res)
 		if err != nil { return err }
@@ -361,32 +359,6 @@ func stringify(ptr memory.Ptr) string {
 	}
 	if header.Type == memory.TagNull { return "kosong" }
 	return fmt.Sprintf("ptr:%d", ptr)
-}
-
-func equals(p1, p2 memory.Ptr) bool {
-	if p1 == p2 { return true }
-
-	h1, _ := memory.ReadHeader(p1)
-	h2, _ := memory.ReadHeader(p2)
-
-	if h1.Type != h2.Type { return false }
-
-	if h1.Type == memory.TagInteger {
-		v1, _ := memory.ReadInteger(p1)
-		v2, _ := memory.ReadInteger(p2)
-		return v1 == v2
-	}
-	if h1.Type == memory.TagString {
-		v1, _ := memory.ReadString(p1)
-		v2, _ := memory.ReadString(p2)
-		return v1 == v2
-	}
-	if h1.Type == memory.TagBoolean {
-		v1, _ := memory.ReadBoolean(p1)
-		v2, _ := memory.ReadBoolean(p2)
-		return v1 == v2
-	}
-	return false
 }
 
 func equals(p1, p2 memory.Ptr) bool {
