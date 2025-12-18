@@ -395,6 +395,10 @@ func (c *Compiler) Compile(node parser.Node) error {
 		integer := &object.Integer{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(integer))
 
+	case *parser.FloatLiteral:
+		floatVal := &object.Float{Value: node.Value}
+		c.emit(OpLoadConst, c.addConstant(floatVal))
+
 	case *parser.BooleanLiteral:
 		boolean := &object.Boolean{Value: node.Value}
 		c.emit(OpLoadConst, c.addConstant(boolean))
