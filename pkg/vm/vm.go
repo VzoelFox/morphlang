@@ -728,12 +728,12 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 	// Phase X: Allocate in Custom Memory
 	// Hybrid: We create the Go Object, but we ALSO write to the Drawer to prove integration.
 	// In the future, we will return a Pointer wrapper.
-	_, allocErr := memory.AllocInteger(result)
+	ptr, allocErr := memory.AllocInteger(result)
 	if allocErr != nil {
 		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
 	}
 
-	return vm.push(&object.Integer{Value: result})
+	return vm.push(&object.Integer{Value: result, Address: ptr})
 }
 
 func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object.Object) error {
@@ -770,7 +770,13 @@ func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object
 		return fmt.Errorf("unknown float operator: %d", op)
 	}
 
-	return vm.push(&object.Float{Value: result})
+	// Phase X: Custom Memory Allocation (Hybrid)
+	ptr, allocErr := memory.AllocFloat(result)
+	if allocErr != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
+	}
+
+	return vm.push(&object.Float{Value: result, Address: ptr})
 }
 
 func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right object.Object) error {

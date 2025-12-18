@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/VzoelFox/morphlang/pkg/memory"
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
 
@@ -47,7 +48,8 @@ type Hashable interface {
 }
 
 type Integer struct {
-	Value int64
+	Value   int64
+	Address memory.Ptr
 }
 
 func (i *Integer) Type() ObjectType { return INTEGER_OBJ }
@@ -57,7 +59,8 @@ func (i *Integer) HashKey() HashKey {
 }
 
 type Float struct {
-	Value float64
+	Value   float64
+	Address memory.Ptr
 }
 
 func (f *Float) Type() ObjectType { return FLOAT_OBJ }
