@@ -79,27 +79,27 @@ func init() {
 		return &Mutex{}
 	})
 
-	// kunci(mutex) -> Null
-	RegisterBuiltin("kunci", func(args ...Object) Object {
+	// gembok(mutex) -> Null
+	RegisterBuiltin("gembok", func(args ...Object) Object {
 		if len(args) != 1 {
 			return newArgumentError(len(args), 1)
 		}
 		mu, ok := args[0].(*Mutex)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `kunci` must be MUTEX, got %s", args[0].Type())}
+			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `gembok` must be MUTEX, got %s", args[0].Type())}
 		}
 		mu.Mu.Lock()
 		return &Null{}
 	})
 
-	// buka(mutex) -> Null
-	RegisterBuiltin("buka", func(args ...Object) Object {
+	// buka_gembok(mutex) -> Null
+	RegisterBuiltin("buka_gembok", func(args ...Object) Object {
 		if len(args) != 1 {
 			return newArgumentError(len(args), 1)
 		}
 		mu, ok := args[0].(*Mutex)
 		if !ok {
-			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `buka` must be MUTEX, got %s", args[0].Type())}
+			return &Error{Code: ErrCodeTypeMismatch, Message: fmt.Sprintf("argument to `buka_gembok` must be MUTEX, got %s", args[0].Type())}
 		}
 		mu.Mu.Unlock()
 		return &Null{}

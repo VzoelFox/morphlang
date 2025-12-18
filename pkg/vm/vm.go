@@ -3,10 +3,12 @@ package vm
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/VzoelFox/morphlang/pkg/compiler"
 	"github.com/VzoelFox/morphlang/pkg/memory"
 	"github.com/VzoelFox/morphlang/pkg/object"
+	"github.com/VzoelFox/morphlang/pkg/scheduler"
 )
 
 const StackSize = 2048
@@ -18,7 +20,17 @@ var (
 	False         = &object.Boolean{Value: false}
 	Null          = &object.Null{}
 	bootstrapOnce sync.Once
+	schedulerOnce sync.Once
+	taskRegistry  sync.Map
+	taskIDGen     int64
 )
+
+type TaskContext struct {
+	Closure   *object.Closure
+	Globals   []object.Object
+	Constants []object.Object
+	ResultCh  chan object.Object
+}
 
 type VMSnapshot struct {
 	Stack       []object.Object
@@ -73,6 +85,12 @@ func New(bytecode *compiler.Bytecode) *VM {
 			ptr, _ := memory.AllocBoolean(false)
 			False.Address = ptr
 		}
+	})
+
+	// Phase X: Init Global Scheduler
+	schedulerOnce.Do(func() {
+		// 4 Workers
+		scheduler.Init(4, executeTask)
 	})
 
 	// Acquire Drawer 0 for Main Thread (Simulation)
@@ -553,43 +571,82 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 		return nil, fmt.Errorf("luncurkan function must accept 0 arguments")
 	}
 
-	// Create new VM with ISOLATED globals (Copy-on-Spawn)
-	// This ensures that variable modifications in the thread do not affect the parent.
-	frames := make([]*Frame, MaxFrames)
-	frames[0] = NewFrame(cl, 0)
-
+	// Prepare Task Context
+	taskID := atomic.AddInt64(&taskIDGen, 1)
 	newGlobals := make([]object.Object, len(vm.globals))
 	copy(newGlobals, vm.globals)
+	resultCh := make(chan object.Object, 1)
+
+	ctx := TaskContext{
+		Closure:   cl,
+		Globals:   newGlobals,
+		Constants: vm.constants,
+		ResultCh:  resultCh,
+	}
+	taskRegistry.Store(taskID, ctx)
+
+	// Alloc TaskID in Memory (Hybrid)
+	ptr, err := memory.AllocInteger(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Submit to Scheduler
+	err = scheduler.Submit(ptr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &object.Thread{Result: resultCh}, nil
+}
+
+func executeTask(ptr memory.Ptr) {
+	// 1. Read TaskID
+	id, err := memory.ReadInteger(ptr)
+	if err != nil {
+		fmt.Printf("Scheduler Error: Failed to read TaskID: %v\n", err)
+		return
+	}
+
+	// 2. Retrieve Context
+	val, ok := taskRegistry.Load(id)
+	if !ok {
+		fmt.Printf("Scheduler Error: TaskID %d not found in registry\n", id)
+		return
+	}
+	taskRegistry.Delete(id)
+	ctx := val.(TaskContext)
+
+	// 3. Setup VM
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = NewFrame(ctx.Closure, 0)
 
 	newVM := &VM{
-		constants:   vm.constants,
-		globals:     newGlobals,
+		constants:   ctx.Constants,
+		globals:     ctx.Globals,
 		stack:       [StackSize]object.Object{},
-		sp:          cl.Fn.NumLocals, // Reserve space for locals on the stack
+		sp:          ctx.Closure.Fn.NumLocals,
 		frames:      frames,
 		framesIndex: 1,
 		snapshots:   make([]VMSnapshot, 0),
+		// Note: Cabinet is global (Lemari)
+		// Drawer? Each thread needs a drawer?
+		// Currently Alloc uses ActiveDrawerIndex from Cabinet (Global Lock).
+		// So threads share drawers via global lock. This is safe (locked).
 	}
 
-	resultCh := make(chan object.Object, 1)
-
-	go func() {
-		err := newVM.Run()
-		if err != nil {
-			// If run fails, send error
-			resultCh <- &object.Error{Message: fmt.Sprintf("Background task error: %v", err)}
+	// 4. Run
+	err = newVM.Run()
+	if err != nil {
+		ctx.ResultCh <- &object.Error{Message: fmt.Sprintf("Background task error: %v", err)}
+	} else {
+		if newVM.LastPoppedStackElem != nil {
+			ctx.ResultCh <- newVM.LastPoppedStackElem
 		} else {
-			// If run succeeds, send last popped element (return value) or Null
-			if newVM.LastPoppedStackElem != nil {
-				resultCh <- newVM.LastPoppedStackElem
-			} else {
-				resultCh <- Null
-			}
+			ctx.ResultCh <- Null
 		}
-		close(resultCh)
-	}()
-
-	return &object.Thread{Result: resultCh}, nil
+	}
+	close(ctx.ResultCh)
 }
 
 func (vm *VM) push(o object.Object) error {
@@ -726,6 +783,9 @@ func (vm *VM) executeBinaryArrayOperation(op compiler.Opcode, left, right object
 
 	// Copy pointers
 	for i, obj := range newElements {
+		if err := vm.ensureOnHeap(obj); err != nil {
+			return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed for element: %s", err)})
+		}
 		elemPtr := getObjectAddress(obj)
 		if elemPtr != 0 {
 			memory.WriteArrayElement(ptr, i, elemPtr)
@@ -735,9 +795,65 @@ func (vm *VM) executeBinaryArrayOperation(op compiler.Opcode, left, right object
 	return vm.push(&object.Array{Elements: newElements, Address: ptr})
 }
 
+func (vm *VM) ensureOnHeap(obj object.Object) error {
+	switch o := obj.(type) {
+	case *object.Integer:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocInteger(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	case *object.Float:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocFloat(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	case *object.String:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocString(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	case *object.Boolean:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocBoolean(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	}
+	return nil
+}
+
 func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right object.Object) error {
-	leftVal := left.(*object.Integer).Value
-	rightVal := right.(*object.Integer).Value
+	if err := vm.ensureOnHeap(left); err != nil {
+		return err
+	}
+	if err := vm.ensureOnHeap(right); err != nil {
+		return err
+	}
+
+	// Phase 3: Full Swap - Read from Memory
+	leftVal, err := memory.ReadInteger(left.(*object.Integer).Address)
+	if err != nil {
+		return err
+	}
+	rightVal, err := memory.ReadInteger(right.(*object.Integer).Address)
+	if err != nil {
+		return err
+	}
 
 	var result int64
 
@@ -757,9 +873,6 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown integer operator: %d", op)})
 	}
 
-	// Phase X: Allocate in Custom Memory
-	// Hybrid: We create the Go Object, but we ALSO write to the Drawer to prove integration.
-	// In the future, we will return a Pointer wrapper.
 	ptr, allocErr := memory.AllocInteger(result)
 	if allocErr != nil {
 		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
@@ -769,21 +882,44 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 }
 
 func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object.Object) error {
+	if err := vm.ensureOnHeap(left); err != nil {
+		return err
+	}
+	if err := vm.ensureOnHeap(right); err != nil {
+		return err
+	}
+
 	var leftVal float64
 	var rightVal float64
+	var err error
 
 	if left.Type() == object.INTEGER_OBJ {
-		leftVal = float64(left.(*object.Integer).Value)
+		// Auto-promote read
+		intVal, err := memory.ReadInteger(left.(*object.Integer).Address)
+		if err != nil {
+			return err
+		}
+		leftVal = float64(intVal)
 	} else if left.Type() == object.FLOAT_OBJ {
-		leftVal = left.(*object.Float).Value
+		leftVal, err = memory.ReadFloat(left.(*object.Float).Address)
+		if err != nil {
+			return err
+		}
 	} else {
 		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", left.Type())})
 	}
 
 	if right.Type() == object.INTEGER_OBJ {
-		rightVal = float64(right.(*object.Integer).Value)
+		intVal, err := memory.ReadInteger(right.(*object.Integer).Address)
+		if err != nil {
+			return err
+		}
+		rightVal = float64(intVal)
 	} else if right.Type() == object.FLOAT_OBJ {
-		rightVal = right.(*object.Float).Value
+		rightVal, err = memory.ReadFloat(right.(*object.Float).Address)
+		if err != nil {
+			return err
+		}
 	} else {
 		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", right.Type())})
 	}
@@ -802,7 +938,6 @@ func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object
 		return fmt.Errorf("unknown float operator: %d", op)
 	}
 
-	// Phase X: Custom Memory Allocation (Hybrid)
 	ptr, allocErr := memory.AllocFloat(result)
 	if allocErr != nil {
 		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
@@ -816,16 +951,30 @@ func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right objec
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown string operator: %d", op)})
 	}
 
+	if err := vm.ensureOnHeap(left); err != nil {
+		return err
+	}
+	if err := vm.ensureOnHeap(right); err != nil {
+		return err
+	}
+
 	var leftVal string
+	var err error
 	if leftStr, ok := left.(*object.String); ok {
-		leftVal = leftStr.Value
+		leftVal, err = memory.ReadString(leftStr.Address)
+		if err != nil {
+			return err
+		}
 	} else {
-		leftVal = left.Inspect()
+		leftVal = left.Inspect() // Fallback for non-strings (e.g. integer to string)
 	}
 
 	var rightVal string
 	if rightStr, ok := right.(*object.String); ok {
-		rightVal = rightStr.Value
+		rightVal, err = memory.ReadString(rightStr.Address)
+		if err != nil {
+			return err
+		}
 	} else {
 		rightVal = right.Inspect()
 	}
@@ -1064,6 +1213,10 @@ func (vm *VM) buildArray(startIndex, endIndex int) (object.Object, error) {
 	for i := 0; i < length; i++ {
 		obj := vm.stack[startIndex+i]
 		elements[i] = obj
+
+		if err := vm.ensureOnHeap(obj); err != nil {
+			return nil, err
+		}
 
 		elemPtr := getObjectAddress(obj)
 		if elemPtr != 0 {
