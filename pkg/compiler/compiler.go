@@ -10,6 +10,7 @@ import (
 
 	"github.com/VzoelFox/morphlang/pkg/analysis"
 	"github.com/VzoelFox/morphlang/pkg/lexer"
+	"github.com/VzoelFox/morphlang/pkg/memory"
 	"github.com/VzoelFox/morphlang/pkg/object"
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
@@ -596,11 +597,12 @@ func (c *Compiler) Compile(node parser.Node) error {
 			}
 		}
 
-		compiledFn := &object.CompiledFunction{
-			Instructions:  instructions,
-			NumLocals:     numLocals,
-			NumParameters: len(node.Parameters),
+		ptr, err := memory.AllocCompiledFunction(instructions, numLocals, len(node.Parameters))
+		if err != nil {
+			return err
 		}
+
+		compiledFn := &object.CompiledFunction{Address: ptr}
 
 		fnIndex := c.addConstant(compiledFn)
 		c.emit(OpClosure, fnIndex, len(freeSymbols))
@@ -800,14 +802,22 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		if fn, ok := constant.(*object.CompiledFunction); ok {
 			newIdx := indexMap[oldIdx]
 
-			newFn := &object.CompiledFunction{
-				NumLocals:     fn.NumLocals,
-				NumParameters: fn.NumParameters,
-				Instructions:  make([]byte, len(fn.Instructions)),
+			oldInstr, oldLocals, oldParams, err := memory.ReadCompiledFunction(fn.Address)
+			if err != nil {
+				return 0, err
 			}
-			copy(newFn.Instructions, fn.Instructions)
 
-			c.remapInstructions(newFn.Instructions, indexMap)
+			newInstr := make([]byte, len(oldInstr))
+			copy(newInstr, oldInstr)
+
+			c.remapInstructions(newInstr, indexMap)
+
+			ptr, err := memory.AllocCompiledFunction(newInstr, oldLocals, oldParams)
+			if err != nil {
+				return 0, err
+			}
+
+			newFn := &object.CompiledFunction{Address: ptr}
 			c.constants[newIdx] = newFn
 		}
 	}
