@@ -101,8 +101,21 @@ type ReturnValue struct {
 func (rv *ReturnValue) Type() ObjectType { return RETURN_VALUE_OBJ }
 func (rv *ReturnValue) Inspect() string  { return rv.Value.Inspect() }
 
+const (
+	ErrCodeSyntax          = "E001"
+	ErrCodeUndefined       = "E002"
+	ErrCodeTypeMismatch    = "E003"
+	ErrCodeUncheckedError  = "E004"
+	ErrCodeRuntime         = "E005" // Generic Runtime (DivByZero etc)
+	ErrCodeIndexOutOfBounds = "E006"
+	ErrCodeInvalidOp       = "E007"
+	ErrCodeMissingArgs     = "E008"
+	ErrCodeTooManyArgs     = "E009"
+)
+
 type Error struct {
 	Message    string
+	Code       string
 	Line       int
 	Column     int
 	File       string
@@ -115,7 +128,11 @@ func (e *Error) Inspect() string {
 	var out bytes.Buffer
 
 	// Basic Error Header
-	out.WriteString(fmt.Sprintf("Error di [%s:%d:%d]:\n", e.File, e.Line, e.Column))
+	if e.Code != "" {
+		out.WriteString(fmt.Sprintf("Error [%s] di [%s:%d:%d]:\n", e.Code, e.File, e.Line, e.Column))
+	} else {
+		out.WriteString(fmt.Sprintf("Error di [%s:%d:%d]:\n", e.File, e.Line, e.Column))
+	}
 	out.WriteString(fmt.Sprintf("  %s\n", e.Message))
 
 	if len(e.StackTrace) > 0 {
