@@ -9,17 +9,19 @@ import (
 
 // Worker represents a processing unit that consumes tasks from the queue.
 type Worker struct {
-	ID    int
-	Queue *Queue
-	Quit  chan bool
+	ID       int
+	Queue    *Queue
+	Quit     chan bool
+	Executor func(memory.Ptr)
 }
 
 // NewWorker creates a new worker instance.
-func NewWorker(id int, q *Queue) *Worker {
+func NewWorker(id int, q *Queue, executor func(memory.Ptr)) *Worker {
 	return &Worker{
-		ID:    id,
-		Queue: q,
-		Quit:  make(chan bool),
+		ID:       id,
+		Queue:    q,
+		Quit:     make(chan bool),
+		Executor: executor,
 	}
 }
 
@@ -52,10 +54,11 @@ func (w *Worker) Start() {
 }
 
 // execute processes the task pointed to by taskPtr.
-// In the full system, this would load a Routine context and resume the VM.
+// It delegates execution to the registered callback.
 func (w *Worker) execute(taskPtr memory.Ptr) {
-	// Placeholder for Phase X execution logic
-	// e.g., Resume(taskPtr)
+	if w.Executor != nil {
+		w.Executor(taskPtr)
+	}
 }
 
 // Stop signals the worker to exit.
