@@ -142,7 +142,12 @@ var Builtins = []BuiltinDef{
 			if err != nil {
 				return &Error{Code: ErrCodeRuntime, Message: fmt.Sprintf("baca_file error: %s", err.Error())}
 			}
-			return &String{Value: string(content)}
+			strVal := string(content)
+			ptr, memErr := memory.AllocString(strVal)
+			if memErr != nil {
+				return &Error{Code: ErrCodeRuntime, Message: fmt.Sprintf("baca_file memory error: %s", memErr.Error())}
+			}
+			return &String{Value: strVal, Address: ptr}
 		}},
 	},
 	{
@@ -257,7 +262,12 @@ var Builtins = []BuiltinDef{
 			if err != nil && err != io.EOF {
 				return &Error{Code: ErrCodeRuntime, Message: "baca error: " + err.Error()}
 			}
-			return &String{Value: string(content)}
+			strVal := string(content)
+			ptr, memErr := memory.AllocString(strVal)
+			if memErr != nil {
+				return &Error{Code: ErrCodeRuntime, Message: "baca memory error: " + memErr.Error()}
+			}
+			return &String{Value: strVal, Address: ptr}
 		}},
 	},
 	{
@@ -304,7 +314,12 @@ var Builtins = []BuiltinDef{
 			if err != nil {
 				return &Error{Code: ErrCodeRuntime, Message: fmt.Sprintf("input error: %s", err.Error())}
 			}
-			return &String{Value: strings.TrimSpace(text)}
+			strVal := strings.TrimSpace(text)
+			ptr, memErr := memory.AllocString(strVal)
+			if memErr != nil {
+				return &Error{Code: ErrCodeRuntime, Message: fmt.Sprintf("input memory error: %s", memErr.Error())}
+			}
+			return &String{Value: strVal, Address: ptr}
 		}},
 	},
 	{
