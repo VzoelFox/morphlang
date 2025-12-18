@@ -26,11 +26,11 @@ const (
 )
 
 // Header is the metadata for every object in our heap.
-// Aligned to 8 bytes.
+// Aligned to 16 bytes.
 type Header struct {
 	Type TypeTag
 	Size uint32 // Total size including header
-	// Padding/Forwarding pointer for GC could go here
+	Forwarding Ptr // Forwarding pointer for GC (0 if not forwarded)
 }
 
 // Size of header

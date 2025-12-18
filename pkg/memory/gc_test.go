@@ -76,14 +76,14 @@ func TestGC_Daemon_Aging(t *testing.T) {
 	Lemari.Drawers[0].AccessCount = 100
 
 	// Manually trigger GC cycle (simulate Daemon wake up)
-	Lemari.GC()
+	Lemari.LFUAging()
 
 	// Score should halve
 	if Lemari.Drawers[0].AccessCount != 50 {
 		t.Errorf("Aging Failure: Expected 50, got %d", Lemari.Drawers[0].AccessCount)
 	}
 
-	Lemari.GC()
+	Lemari.LFUAging()
 	if Lemari.Drawers[0].AccessCount != 25 {
 		t.Errorf("Aging Failure: Expected 25, got %d", Lemari.Drawers[0].AccessCount)
 	}
