@@ -3,6 +3,7 @@ package object
 import (
 	"bufio"
 	"fmt"
+	"github.com/VzoelFox/morphlang/pkg/memory"
 	"io"
 	"math"
 	"os"
@@ -683,6 +684,88 @@ func init() {
 			return &Boolean{Value: true}
 		}
 		return &Boolean{Value: false}
+	})
+
+	RegisterBuiltin("alokasi", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		size, ok := args[0].(*Integer)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument to `alokasi` must be INTEGER, got %s", args[0].Type())}
+		}
+
+		ptr, err := memory.Lemari.Alloc(int(size.Value))
+		if err != nil {
+			return &Error{Message: "allocation failed: " + err.Error()}
+		}
+		return &Pointer{Address: uint64(ptr)}
+	})
+
+	RegisterBuiltin("tulis_mem", func(args ...Object) Object {
+		if len(args) != 2 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
+		}
+		ptr, ok := args[0].(*Pointer)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("first argument to `tulis_mem` must be POINTER, got %s", args[0].Type())}
+		}
+
+		var data []byte
+		switch val := args[1].(type) {
+		case *String:
+			data = []byte(val.Value)
+		default:
+			return &Error{Message: fmt.Sprintf("second argument to `tulis_mem` must be STRING, got %s", args[1].Type())}
+		}
+
+		err := memory.Write(memory.Ptr(ptr.Address), data)
+		if err != nil {
+			return &Error{Message: "tulis_mem error: " + err.Error()}
+		}
+		return &Null{}
+	})
+
+	RegisterBuiltin("baca_mem", func(args ...Object) Object {
+		if len(args) != 2 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
+		}
+		ptr, ok := args[0].(*Pointer)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("first argument to `baca_mem` must be POINTER, got %s", args[0].Type())}
+		}
+		size, ok := args[1].(*Integer)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("second argument to `baca_mem` must be INTEGER, got %s", args[1].Type())}
+		}
+
+		data, err := memory.Read(memory.Ptr(ptr.Address), int(size.Value))
+		if err != nil {
+			return &Error{Message: "baca_mem error: " + err.Error()}
+		}
+		return &String{Value: string(data)}
+	})
+
+	RegisterBuiltin("alamat", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		ptr, ok := args[0].(*Pointer)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument to `alamat` must be POINTER, got %s", args[0].Type())}
+		}
+		return &Integer{Value: int64(ptr.Address)}
+	})
+
+	RegisterBuiltin("ptr_dari", func(args ...Object) Object {
+		if len(args) != 1 {
+			return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+		}
+		addr, ok := args[0].(*Integer)
+		if !ok {
+			return &Error{Message: fmt.Sprintf("argument to `ptr_dari` must be INTEGER, got %s", args[0].Type())}
+		}
+		return &Pointer{Address: uint64(addr.Value)}
 	})
 }
 

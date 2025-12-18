@@ -34,6 +34,7 @@ const (
 	MUTEX_OBJ             = "MUTEX"
 	ATOM_OBJ              = "ATOM"
 	FILE_OBJ              = "FILE"
+	POINTER_OBJ           = "POINTER"
 )
 
 type Object interface {
@@ -182,6 +183,15 @@ type File struct {
 func (f *File) Type() ObjectType { return FILE_OBJ }
 func (f *File) Inspect() string {
 	return fmt.Sprintf("file[%s]", f.File.Name())
+}
+
+type Pointer struct {
+	Address uint64
+}
+
+func (p *Pointer) Type() ObjectType { return POINTER_OBJ }
+func (p *Pointer) Inspect() string {
+	return fmt.Sprintf("ptr[0x%x]", p.Address)
 }
 
 type BuiltinFunction func(args ...Object) Object
