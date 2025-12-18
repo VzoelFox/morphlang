@@ -34,3 +34,18 @@ func TestFloatArithmetic(t *testing.T) {
 
 	runVmTests(t, tests)
 }
+
+func TestStringConcatenationMixed(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`"a" + 1`, "a1"},
+		{`"a" + 1.5`, "a1.5"},
+		{`1 + "a"`, "1a"},
+		{`1.5 + "a"`, "1.5a"},
+		{`" " + 1`, " 1"},
+	}
+
+	runVmTests(t, tests)
+}

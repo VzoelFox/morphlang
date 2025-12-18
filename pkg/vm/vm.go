@@ -626,7 +626,7 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		return vm.executeBinaryIntegerOperation(op, left, right)
 	}
 
-	if leftType == object.STRING_OBJ {
+	if leftType == object.STRING_OBJ || rightType == object.STRING_OBJ {
 		return vm.executeBinaryStringOperation(op, left, right)
 	}
 
@@ -723,9 +723,14 @@ func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right objec
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown string operator: %d", op)})
 	}
 
-	leftVal := left.(*object.String).Value
-	var rightVal string
+	var leftVal string
+	if leftStr, ok := left.(*object.String); ok {
+		leftVal = leftStr.Value
+	} else {
+		leftVal = left.Inspect()
+	}
 
+	var rightVal string
 	if rightStr, ok := right.(*object.String); ok {
 		rightVal = rightStr.Value
 	} else {

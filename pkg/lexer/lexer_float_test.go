@@ -13,14 +13,6 @@ func TestFloatTokens(t *testing.T) {
 123.
 1.method
 `
-	// Expected behavior:
-	// 123 -> INT
-	// 123.45 -> FLOAT
-	// 0.5 -> FLOAT
-	// .5 -> DOT, INT(5) (As decided: no leading dot for float)
-	// 123. -> INT(123), DOT
-	// 1.method -> INT(1), DOT, IDENT(method)
-
 	tests := []struct {
 		expectedType    TokenType
 		expectedLiteral string
@@ -52,5 +44,14 @@ func TestFloatTokens(t *testing.T) {
 			t.Fatalf("tests[%d] - token literal wrong. expected=%q, got=%q",
 				i, tt.expectedLiteral, tok.Literal)
 		}
+	}
+}
+
+func TestEmptyString(t *testing.T) {
+	input := `""`
+	l := New(input)
+	tok := l.NextToken()
+	if tok.Type != STRING || tok.Literal != "" {
+		t.Fatalf("expected empty string, got %q (%q)", tok.Type, tok.Literal)
 	}
 }
