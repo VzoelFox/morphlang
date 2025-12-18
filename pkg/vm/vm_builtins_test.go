@@ -43,10 +43,7 @@ func TestVMRuntimeErrors(t *testing.T) {
 			expected: &object.Error{Message: "division by zero"},
 		},
 		// Type mismatch (Arithmetic)
-		{
-			input: `1 + "a"`,
-			expected: &object.Error{Message: "unsupported types for binary operation: INTEGER STRING"},
-		},
+		// 1 + "a" is now valid ("1a")
 		{
 			input: `"a" - "b"`,
 			expected: &object.Error{Message: "unknown string operator: 33"},

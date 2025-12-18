@@ -3,6 +3,7 @@ package object
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strings"
@@ -145,6 +146,124 @@ var Builtins = []BuiltinDef{
 			err := os.WriteFile(path.Value, []byte(content.Value), 0644)
 			if err != nil {
 				return &Error{Message: fmt.Sprintf("tulis_file error: %s", err.Error())}
+			}
+			return &Null{}
+		}},
+	},
+	{
+		"buka_file",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 2 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
+			}
+			path, ok := args[0].(*String)
+			if !ok {
+				return &Error{Message: fmt.Sprintf("first argument to `buka_file` must be STRING, got %s", args[0].Type())}
+			}
+			mode, ok := args[1].(*String)
+			if !ok {
+				return &Error{Message: fmt.Sprintf("second argument to `buka_file` must be STRING, got %s", args[1].Type())}
+			}
+
+			var flag int
+			switch mode.Value {
+			case "b": // Baca (Read)
+				flag = os.O_RDONLY
+			case "t": // Tulis (Write/Truncate)
+				flag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+			case "tb": // Tulis Baru (Truncate - same as t)
+				flag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+			case "t+": // Tulis Tambah (Append)
+				flag = os.O_WRONLY | os.O_CREATE | os.O_APPEND
+			default:
+				return &Error{Message: "unknown file mode: " + mode.Value}
+			}
+
+			f, err := os.OpenFile(path.Value, flag, 0644)
+			if err != nil {
+				return &Error{Message: "failed to open file: " + err.Error()}
+			}
+			return &File{File: f, Mode: mode.Value}
+		}},
+	},
+	{
+		"tutup_file",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			f, ok := args[0].(*File)
+			if !ok {
+				return &Error{Message: fmt.Sprintf("argument to `tutup_file` must be FILE, got %s", args[0].Type())}
+			}
+			err := f.File.Close()
+			if err != nil {
+				return &Error{Message: "failed to close file: " + err.Error()}
+			}
+			return &Null{}
+		}},
+	},
+	{
+		"baca",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) < 1 || len(args) > 2 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1 or 2, got %d", len(args))}
+			}
+			f, ok := args[0].(*File)
+			if !ok {
+				return &Error{Message: fmt.Sprintf("first argument to `baca` must be FILE, got %s", args[0].Type())}
+			}
+
+			var limit int64 = -1
+			if len(args) == 2 {
+				n, ok := args[1].(*Integer)
+				if !ok {
+					return &Error{Message: fmt.Sprintf("second argument to `baca` must be INTEGER, got %s", args[1].Type())}
+				}
+				limit = n.Value
+			}
+
+			var content []byte
+			var err error
+
+			if limit < 0 {
+				content, err = io.ReadAll(f.File)
+			} else {
+				content = make([]byte, limit)
+				var n int
+				n, err = f.File.Read(content)
+				if n < int(limit) {
+					content = content[:n]
+				}
+			}
+
+			if err != nil && err != io.EOF {
+				return &Error{Message: "baca error: " + err.Error()}
+			}
+			return &String{Value: string(content)}
+		}},
+	},
+	{
+		"tulis",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 2 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
+			}
+			f, ok := args[0].(*File)
+			if !ok {
+				return &Error{Message: fmt.Sprintf("first argument to `tulis` must be FILE, got %s", args[0].Type())}
+			}
+
+			var content []byte
+			if str, ok := args[1].(*String); ok {
+				content = []byte(str.Value)
+			} else {
+				content = []byte(args[1].Inspect())
+			}
+
+			_, err := f.File.Write(content)
+			if err != nil {
+				return &Error{Message: "tulis error: " + err.Error()}
 			}
 			return &Null{}
 		}},
@@ -308,16 +427,25 @@ var Builtins = []BuiltinDef{
 			if len(args) != 2 {
 				return &Error{Message: fmt.Sprintf("argument mismatch: expected 2, got %d", len(args))}
 			}
-			x, ok := args[0].(*Integer)
-			if !ok {
-				return &Error{Message: fmt.Sprintf("first argument to `pow` must be INTEGER, got %s", args[0].Type())}
+
+			xVal, err := getFloatValue(args[0])
+			if err != nil {
+				return &Error{Message: "first argument to `pow` " + err.Error()}
 			}
-			y, ok := args[1].(*Integer)
-			if !ok {
-				return &Error{Message: fmt.Sprintf("second argument to `pow` must be INTEGER, got %s", args[1].Type())}
+			yVal, err := getFloatValue(args[1])
+			if err != nil {
+				return &Error{Message: "second argument to `pow` " + err.Error()}
 			}
-			res := math.Pow(float64(x.Value), float64(y.Value))
-			return &Integer{Value: int64(res)}
+
+			res := math.Pow(xVal, yVal)
+
+			// If both are integers, try to return integer (if result is integer-like)
+			// But math.Pow returns float.
+			// Let's stick to returning Float if ANY input is Float, or Float result.
+			// Actually, to be consistent with new float support, return Float.
+			// Unless we want `pow(2, 3)` to be 8 (int).
+			// Let's return Float for generic `pow`.
+			return &Float{Value: res}
 		}},
 	},
 	{
@@ -326,17 +454,102 @@ var Builtins = []BuiltinDef{
 			if len(args) != 1 {
 				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
 			}
-			x, ok := args[0].(*Integer)
-			if !ok {
-				return &Error{Message: fmt.Sprintf("argument to `sqrt` must be INTEGER, got %s", args[0].Type())}
+
+			val, err := getFloatValue(args[0])
+			if err != nil {
+				return &Error{Message: "argument to `sqrt` " + err.Error()}
 			}
-			if x.Value < 0 {
+
+			if val < 0 {
 				return &Error{Message: "cannot calculate square root of negative number"}
 			}
-			res := math.Sqrt(float64(x.Value))
-			return &Integer{Value: int64(res)}
+			res := math.Sqrt(val)
+			return &Float{Value: res}
 		}},
 	},
+	{
+		"sin",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			val, err := getFloatValue(args[0])
+			if err != nil { return &Error{Message: "argument to `sin` " + err.Error()} }
+			return &Float{Value: math.Sin(val)}
+		}},
+	},
+	{
+		"cos",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			val, err := getFloatValue(args[0])
+			if err != nil { return &Error{Message: "argument to `cos` " + err.Error()} }
+			return &Float{Value: math.Cos(val)}
+		}},
+	},
+	{
+		"tan",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			val, err := getFloatValue(args[0])
+			if err != nil { return &Error{Message: "argument to `tan` " + err.Error()} }
+			return &Float{Value: math.Tan(val)}
+		}},
+	},
+	{
+		"asin",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			val, err := getFloatValue(args[0])
+			if err != nil { return &Error{Message: "argument to `asin` " + err.Error()} }
+			return &Float{Value: math.Asin(val)}
+		}},
+	},
+	{
+		"acos",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			val, err := getFloatValue(args[0])
+			if err != nil { return &Error{Message: "argument to `acos` " + err.Error()} }
+			return &Float{Value: math.Acos(val)}
+		}},
+	},
+	{
+		"atan",
+		&Builtin{Fn: func(args ...Object) Object {
+			if len(args) != 1 {
+				return &Error{Message: fmt.Sprintf("argument mismatch: expected 1, got %d", len(args))}
+			}
+			val, err := getFloatValue(args[0])
+			if err != nil { return &Error{Message: "argument to `atan` " + err.Error()} }
+			return &Float{Value: math.Atan(val)}
+		}},
+	},
+	{
+		"pi",
+		&Builtin{Fn: func(args ...Object) Object {
+			return &Float{Value: math.Pi}
+		}},
+	},
+}
+
+func getFloatValue(obj Object) (float64, error) {
+	switch val := obj.(type) {
+	case *Integer:
+		return float64(val.Value), nil
+	case *Float:
+		return val.Value, nil
+	default:
+		return 0, fmt.Errorf("must be INTEGER or FLOAT, got %s", val.Type())
+	}
 }
 
 func init() {
