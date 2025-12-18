@@ -186,7 +186,7 @@ func init() {
 		if err != nil {
 			return NewError("failed to open file: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
-		return &File{File: f, Mode: modeVal}
+		return NewFile(f, modeVal)
 	})
 
 	RegisterBuiltin("tutup_file", func(args ...Object) Object {
@@ -489,7 +489,7 @@ func init() {
 
 	// ...
 	RegisterBuiltin("waktu_sekarang", func(args ...Object) Object {
-		return &Time{Value: time.Now()}
+		return NewTime(time.Now())
 	})
 
 	RegisterBuiltin("waktu_unix", func(args ...Object) Object {
@@ -547,7 +547,7 @@ func init() {
 
 	RegisterBuiltin("atom_baru", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
-		return &Atom{Value: args[0]}
+		return NewAtom(args[0])
 	})
 
 	RegisterBuiltin("atom_baca", func(args ...Object) Object {
@@ -596,7 +596,7 @@ func init() {
 		if err != nil {
 			return NewError("allocation failed: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
-		return &Pointer{Address: uint64(ptr)}
+		return NewPointer(uint64(ptr))
 	})
 
 	RegisterBuiltin("tulis_mem", func(args ...Object) Object {
@@ -612,7 +612,7 @@ func init() {
 			return NewError(fmt.Sprintf("second argument to `tulis_mem` must be STRING, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0)
 		}
 
-		err := memory.Write(memory.Ptr(ptr.Address), data)
+		err := memory.Write(memory.Ptr(ptr.GetValue()), data)
 		if err != nil {
 			return NewError("tulis_mem error: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
@@ -626,7 +626,7 @@ func init() {
 		size, ok := args[1].(*Integer)
 		if !ok { return NewError(fmt.Sprintf("second argument to `baca_mem` must be INTEGER, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0) }
 
-		data, err := memory.Read(memory.Ptr(ptr.Address), int(size.GetValue()))
+		data, err := memory.Read(memory.Ptr(ptr.GetValue()), int(size.GetValue()))
 		if err != nil {
 			return NewError("baca_mem error: "+err.Error(), ErrCodeRuntime, 0, 0)
 		}
@@ -637,14 +637,14 @@ func init() {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		ptr, ok := args[0].(*Pointer)
 		if !ok { return NewError(fmt.Sprintf("argument to `alamat` must be POINTER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
-		return NewInteger(int64(ptr.Address))
+		return NewInteger(int64(ptr.GetValue()))
 	})
 
 	RegisterBuiltin("ptr_dari", func(args ...Object) Object {
 		if len(args) != 1 { return newArgumentError(len(args), 1) }
 		addr, ok := args[0].(*Integer)
 		if !ok { return NewError(fmt.Sprintf("argument to `ptr_dari` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
-		return &Pointer{Address: uint64(addr.GetValue())}
+		return NewPointer(uint64(addr.GetValue()))
 	})
 }
 

@@ -55,6 +55,10 @@ func FromPtr(ptr memory.Ptr) Object {
 		return &Builtin{Address: ptr, Fn: Builtins[idx].Builtin.Fn}
 	case memory.TagError:
 		return &Error{Address: ptr}
+	case memory.TagResource:
+		return GetResource(ptr)
+	case memory.TagPointer:
+		return &Pointer{Address: ptr}
 	default:
 		// Fallback or Panic
 		panic(fmt.Sprintf("FromPtr: unknown type tag %d", header.Type))

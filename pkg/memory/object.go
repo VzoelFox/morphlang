@@ -20,6 +20,8 @@ const (
 	TagThread TypeTag = 10
 	TagHash    TypeTag = 11
 	TagError   TypeTag = 12
+	TagResource TypeTag = 13
+	TagPointer  TypeTag = 14
 	// ... add others later
 )
 

@@ -54,9 +54,7 @@ type Integer struct {
 
 func NewInteger(val int64) *Integer {
 	ptr, err := memory.AllocInteger(val)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return &Integer{Address: ptr}
 }
 
@@ -81,9 +79,7 @@ type Float struct {
 
 func NewFloat(val float64) *Float {
 	ptr, err := memory.AllocFloat(val)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return &Float{Address: ptr}
 }
 
@@ -104,28 +100,20 @@ type Boolean struct {
 
 func NewBoolean(val bool) *Boolean {
 	ptr, err := memory.AllocBoolean(val)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return &Boolean{Address: ptr}
 }
 
 func (b *Boolean) Type() ObjectType { return BOOLEAN_OBJ }
 func (b *Boolean) Inspect() string {
 	val, _ := memory.ReadBoolean(b.Address)
-	if val {
-		return "benar"
-	}
+	if val { return "benar" }
 	return "salah"
 }
 func (b *Boolean) HashKey() HashKey {
 	val, _ := memory.ReadBoolean(b.Address)
 	var v uint64
-	if val {
-		v = 1
-	} else {
-		v = 0
-	}
+	if val { v = 1 } else { v = 0 }
 	return HashKey{Type: b.Type(), Value: v}
 }
 func (b *Boolean) GetAddress() memory.Ptr { return b.Address }
@@ -140,9 +128,7 @@ type Null struct {
 
 func NewNull() *Null {
 	ptr, err := memory.AllocNull()
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return &Null{Address: ptr}
 }
 
@@ -156,9 +142,8 @@ type ReturnValue struct {
 
 func (rv *ReturnValue) Type() ObjectType       { return RETURN_VALUE_OBJ }
 func (rv *ReturnValue) Inspect() string        { return rv.Value.Inspect() }
-func (rv *ReturnValue) GetAddress() memory.Ptr { return memory.NilPtr } // Virtual
+func (rv *ReturnValue) GetAddress() memory.Ptr { return memory.NilPtr }
 
-// Error struct (Same as before)
 const (
 	ErrCodeSyntax          = "E001"
 	ErrCodeUndefined       = "E002"
@@ -222,43 +207,77 @@ func (e *Error) Inspect() string {
 	out.WriteString(fmt.Sprintf("  %s\n", msg))
 	return out.String()
 }
-func (e *Error) GetAddress() memory.Ptr { return memory.NilPtr }
 
 type Channel struct {
 	Value chan Object
+	Address memory.Ptr
+}
+
+func NewChannel(val chan Object) *Channel {
+	c := &Channel{Value: val}
+	c.Address = RegisterResource(c)
+	return c
 }
 
 func (c *Channel) Type() ObjectType       { return CHANNEL_OBJ }
 func (c *Channel) Inspect() string        { return fmt.Sprintf("saluran[%p]", c.Value) }
-func (c *Channel) GetAddress() memory.Ptr { return memory.NilPtr }
+func (c *Channel) GetAddress() memory.Ptr { return c.Address }
 
 type Thread struct {
 	Result chan Object
+	Address memory.Ptr
+}
+
+func NewThread(res chan Object) *Thread {
+	t := &Thread{Result: res}
+	t.Address = RegisterResource(t)
+	return t
 }
 
 func (t *Thread) Type() ObjectType       { return THREAD_OBJ }
 func (t *Thread) Inspect() string        { return fmt.Sprintf("utas[%p]", t.Result) }
-func (t *Thread) GetAddress() memory.Ptr { return memory.NilPtr }
+func (t *Thread) GetAddress() memory.Ptr { return t.Address }
 
 type Time struct {
 	Value time.Time
+	Address memory.Ptr
+}
+
+func NewTime(val time.Time) *Time {
+	t := &Time{Value: val}
+	t.Address = RegisterResource(t)
+	return t
 }
 
 func (t *Time) Type() ObjectType       { return TIME_OBJ }
 func (t *Time) Inspect() string        { return t.Value.Format(time.RFC3339) }
-func (t *Time) GetAddress() memory.Ptr { return memory.NilPtr }
+func (t *Time) GetAddress() memory.Ptr { return t.Address }
 
 type Mutex struct {
 	Mu sync.Mutex
+	Address memory.Ptr
+}
+
+func NewMutex() *Mutex {
+	m := &Mutex{}
+	m.Address = RegisterResource(m)
+	return m
 }
 
 func (m *Mutex) Type() ObjectType       { return MUTEX_OBJ }
 func (m *Mutex) Inspect() string        { return fmt.Sprintf("mutex[%p]", &m.Mu) }
-func (m *Mutex) GetAddress() memory.Ptr { return memory.NilPtr }
+func (m *Mutex) GetAddress() memory.Ptr { return m.Address }
 
 type Atom struct {
 	Value Object
 	Mu    sync.Mutex
+	Address memory.Ptr
+}
+
+func NewAtom(val Object) *Atom {
+	a := &Atom{Value: val}
+	a.Address = RegisterResource(a)
+	return a
 }
 
 func (a *Atom) Type() ObjectType { return ATOM_OBJ }
@@ -270,24 +289,44 @@ func (a *Atom) Inspect() string {
 	}
 	return "atom[kosong]"
 }
-func (a *Atom) GetAddress() memory.Ptr { return memory.NilPtr }
+func (a *Atom) GetAddress() memory.Ptr { return a.Address }
 
 type File struct {
 	File *os.File
 	Mode string
+	Address memory.Ptr
+}
+
+func NewFile(f *os.File, mode string) *File {
+	fl := &File{File: f, Mode: mode}
+	fl.Address = RegisterResource(fl)
+	return fl
 }
 
 func (f *File) Type() ObjectType       { return FILE_OBJ }
 func (f *File) Inspect() string        { return fmt.Sprintf("file[%s]", f.File.Name()) }
-func (f *File) GetAddress() memory.Ptr { return memory.NilPtr }
+func (f *File) GetAddress() memory.Ptr { return f.Address }
 
 type Pointer struct {
-	Address uint64
+	Address memory.Ptr
+}
+
+func NewPointer(val uint64) *Pointer {
+	ptr, err := memory.AllocPointer(val)
+	if err != nil { panic(err) }
+	return &Pointer{Address: ptr}
 }
 
 func (p *Pointer) Type() ObjectType       { return POINTER_OBJ }
-func (p *Pointer) Inspect() string        { return fmt.Sprintf("ptr[0x%x]", p.Address) }
-func (p *Pointer) GetAddress() memory.Ptr { return memory.Ptr(p.Address) }
+func (p *Pointer) Inspect() string {
+	val, _ := memory.ReadPointer(p.Address)
+	return fmt.Sprintf("ptr[0x%x]", val)
+}
+func (p *Pointer) GetAddress() memory.Ptr { return p.Address }
+func (p *Pointer) GetValue() uint64 {
+	val, _ := memory.ReadPointer(p.Address)
+	return val
+}
 
 type BuiltinFunction func(args ...Object) Object
 
@@ -306,9 +345,7 @@ type String struct {
 
 func NewString(val string) *String {
 	ptr, err := memory.AllocString(val)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return &String{Address: ptr}
 }
 
@@ -362,25 +399,19 @@ func (cf *CompiledFunction) GetAddress() memory.Ptr { return cf.Address }
 
 func (cf *CompiledFunction) NumLocals() int {
 	n, _, err := memory.ReadCompiledFunctionMeta(cf.Address)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return n
 }
 
 func (cf *CompiledFunction) NumParameters() int {
 	_, n, err := memory.ReadCompiledFunctionMeta(cf.Address)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return n
 }
 
 func (cf *CompiledFunction) Instructions() []byte {
 	instr, _, _, err := memory.ReadCompiledFunction(cf.Address)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return instr
 }
 
@@ -394,9 +425,7 @@ func NewClosure(fn *CompiledFunction, freeVars []Object) *Closure {
 		freePtrs[i] = v.GetAddress()
 	}
 	ptr, err := memory.AllocClosure(fn.Address, freePtrs)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	return &Closure{Address: ptr}
 }
 
@@ -426,9 +455,7 @@ type Array struct {
 func NewArray(elements []Object) *Array {
 	count := len(elements)
 	ptr, err := memory.AllocArray(count, count)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	for i, el := range elements {
 		memory.WriteArrayElement(ptr, i, el.GetAddress())
 	}
@@ -438,24 +465,8 @@ func NewArray(elements []Object) *Array {
 func (ao *Array) Type() ObjectType       { return ARRAY_OBJ }
 func (ao *Array) GetAddress() memory.Ptr { return ao.Address }
 func (ao *Array) Inspect() string {
-	var out bytes.Buffer
-	// Read elements from memory
-	// We need length
-	// memory.ReadArrayElement checks bounds, but we need length to iterate
-	// We can use ReadArrayElement(0) etc until error? No.
-	// We need ReadArrayLength.
-	// I'll add GetLength helper.
-	// For now, assume we can get it or just print address.
-	// Inspect is important. I need length.
-	// memory.go doesn't export ReadArrayLength?
-	// I saw ReadArrayElement reads length internally.
-	// I'll assume I can add a helper here using unsafe? No, keep it clean.
-	// Inspect needs to be fixed. I will add ReadArrayLength to pkg/memory/array.go if missing?
-	// It is missing.
-	out.WriteString(fmt.Sprintf("Array[Ptr:0x%x]", ao.Address))
-	return out.String()
+	return fmt.Sprintf("Array[Ptr:0x%x]", ao.Address)
 }
-// Helper to get Elements
 func (ao *Array) GetElements() []Object {
 	len, err := memory.ReadArrayLength(ao.Address)
 	if err != nil { panic(err) }
@@ -500,7 +511,6 @@ func (h *Hash) Inspect() string {
 	return fmt.Sprintf("Hash[Ptr:0x%x]", h.Address)
 }
 
-// Helper to get Pairs
 func (h *Hash) GetPairs() []HashPair {
 	count, _ := memory.ReadHashCount(h.Address)
 	pairs := make([]HashPair, count)

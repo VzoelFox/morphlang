@@ -301,17 +301,13 @@ func runVmTest(t *testing.T, input string, expected interface{}) {
 	vm := New(comp.Bytecode())
 	err = vm.Run()
 
-	// Special handling for expected Error
 	if expectedErr, ok := expected.(*object.Error); ok {
 		if err != nil {
-			// Check against VM runtime error (Go error)
-			// Partial match or full match?
 			if !strings.Contains(err.Error(), expectedErr.GetMessage()) {
 				t.Errorf("wrong vm error message. want substring=%q, got=%q", expectedErr.GetMessage(), err.Error())
 			}
 			return
 		}
-		// If no error, continue to check stack (maybe it returned Error object?)
 	}
 
 	if err != nil {
@@ -393,7 +389,11 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 			return
 		}
 		if obj.Type() != object.NULL_OBJ {
-			t.Errorf("object is not Null. got=%T (%+v)", obj, obj)
+			if errObj, isErr := obj.(*object.Error); isErr {
+				t.Errorf("object is Error: %s", errObj.GetMessage())
+			} else {
+				t.Errorf("object is not Null. got=%T (%+v)", obj, obj)
+			}
 		}
 	case *object.Error:
 		result, ok := obj.(*object.Error)
@@ -414,7 +414,11 @@ func testIntegerObject(t *testing.T, obj object.Object, expected int64) {
 	}
 	result, ok := obj.(*object.Integer)
 	if !ok {
-		t.Errorf("object is not Integer. got=%T (%+v)", obj, obj)
+		if errObj, isErr := obj.(*object.Error); isErr {
+			t.Errorf("object is Error: %s", errObj.GetMessage())
+		} else {
+			t.Errorf("object is not Integer. got=%T (%+v)", obj, obj)
+		}
 		return
 	}
 
@@ -430,7 +434,11 @@ func testFloatObject(t *testing.T, obj object.Object, expected float64) {
 	}
 	result, ok := obj.(*object.Float)
 	if !ok {
-		t.Errorf("object is not Float. got=%T (%+v)", obj, obj)
+		if errObj, isErr := obj.(*object.Error); isErr {
+			t.Errorf("object is Error: %s", errObj.GetMessage())
+		} else {
+			t.Errorf("object is not Float. got=%T (%+v)", obj, obj)
+		}
 		return
 	}
 
@@ -446,7 +454,11 @@ func testBooleanObject(t *testing.T, obj object.Object, expected bool) {
 	}
 	result, ok := obj.(*object.Boolean)
 	if !ok {
-		t.Errorf("object is not Boolean. got=%T (%+v)", obj, obj)
+		if errObj, isErr := obj.(*object.Error); isErr {
+			t.Errorf("object is Error: %s", errObj.GetMessage())
+		} else {
+			t.Errorf("object is not Boolean. got=%T (%+v)", obj, obj)
+		}
 		return
 	}
 
@@ -462,7 +474,11 @@ func testStringObject(t *testing.T, obj object.Object, expected string) {
 	}
 	result, ok := obj.(*object.String)
 	if !ok {
-		t.Errorf("object is not String. got=%T (%+v)", obj, obj)
+		if errObj, isErr := obj.(*object.Error); isErr {
+			t.Errorf("object is Error: %s", errObj.GetMessage())
+		} else {
+			t.Errorf("object is not String. got=%T (%+v)", obj, obj)
+		}
 		return
 	}
 
