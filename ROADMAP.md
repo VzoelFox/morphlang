@@ -366,10 +366,10 @@ morph/
 - [ ] Update VM to support State Checkpointing.
 
 **Patch X.3: Full Swap & Scheduler (Tahap 3)**
-- [ ] Remove Go GC dependency.
-- [ ] Implement FIFO Queue mechanism.
-- [ ] Implement Atomic Shard Assignment (CAS).
-- [ ] Implement Worker Units logic (Morph Routine).
+- [x] Remove Go GC dependency (VM Logic Swapped to Memory Read).
+- [x] Implement FIFO Queue mechanism.
+- [x] Implement Atomic Shard Assignment (CAS).
+- [ ] Implement Worker Units logic (Morph Routine) - Skeleton in `pkg/scheduler/worker.go`.
 
 ---
 
