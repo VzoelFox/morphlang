@@ -9,46 +9,38 @@ import (
 )
 
 func init() {
-	// Register System Builtins
 	RegisterBuiltin("info_memori", func(args ...Object) Object {
 		v, err := mem.VirtualMemory()
 		if err != nil {
-			return &Error{Message: fmt.Sprintf("gopsutil error: %v", err)}
+			return NewError(fmt.Sprintf("gopsutil error: %v", err), ErrCodeRuntime, 0, 0)
 		}
 
-		pairs := make(map[HashKey]HashPair)
-
-		// Keys to export
 		data := map[string]int64{
 			"total":    int64(v.Total),
 			"terpakai": int64(v.Used),
 			"bebas":    int64(v.Free),
-			"persen":   int64(v.UsedPercent), // Rounded down/truncated
+			"persen":   int64(v.UsedPercent),
 		}
 
+		pairs := make([]HashPair, 0, len(data))
 		for k, val := range data {
-			kObj := &String{Value: k}
-			hKey := kObj.HashKey()
-			pairs[hKey] = HashPair{Key: kObj, Value: &Integer{Value: val}}
+			kObj := NewString(k)
+			pairs = append(pairs, HashPair{Key: kObj, Value: NewInteger(val)})
 		}
 
-		return &Hash{Pairs: pairs}
+		return NewHash(pairs)
 	})
 
 	RegisterBuiltin("info_cpu", func(args ...Object) Object {
-		// Interval 0 means return immediately?
-		// Note: First call might be inaccurate or require blocking.
-		// For now we use 0 (non-blocking).
 		percentages, err := cpu.Percent(0, false)
 		if err != nil {
-			return &Error{Message: fmt.Sprintf("gopsutil error: %v", err)}
+			return NewError(fmt.Sprintf("gopsutil error: %v", err), ErrCodeRuntime, 0, 0)
 		}
 
 		if len(percentages) == 0 {
-			return &Integer{Value: 0}
+			return NewInteger(0)
 		}
 
-		// Return aggregate percent as Integer
-		return &Integer{Value: int64(math.Round(percentages[0]))}
+		return NewInteger(int64(math.Round(percentages[0])))
 	})
 }

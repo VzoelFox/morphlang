@@ -18,7 +18,7 @@ func TestStringBuiltins(t *testing.T) {
 		},
 		{
 			input: `pisah("a,b,c", ",")`,
-			expected: []string{"a", "b", "c"}, // Need to handle Array expectation logic in test helper
+			expected: []string{"a", "b", "c"},
 		},
 		{
 			input: `gabung(["x", "y", "z"], "-")`,
@@ -33,11 +33,11 @@ func TestStringBuiltinsErrors(t *testing.T) {
 	tests := []vmTestCase{
 		{
 			input: `huruf_besar(123)`,
-			expected: &object.Error{Message: "argument to `huruf_besar` must be STRING, got INTEGER"},
+			expected: object.NewError("argument to `huruf_besar` must be STRING, got INTEGER", "", 0, 0),
 		},
 		{
 			input: `gabung(["a", 1], "-")`,
-			expected: &object.Error{Message: "array elements must be STRING, got INTEGER"},
+			expected: object.NewError("array elements must be STRING, got INTEGER", "", 0, 0),
 		},
 	}
 

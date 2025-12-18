@@ -14,7 +14,7 @@ func TestFloatInspect(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		obj := &Float{Value: tt.input}
+		obj := NewFloat(tt.input)
 		if obj.Inspect() != tt.expected {
 			t.Errorf("wrong inspect output. want=%q, got=%q", tt.expected, obj.Inspect())
 		}

@@ -7,12 +7,10 @@ import (
 
 func TestBuiltinErrorHandling(t *testing.T) {
 	tests := []vmTestCase{
-		// Test 'galat'
 		{
 			input: `galat("tes error")`,
-			expected: &object.Error{Message: "tes error"},
+			expected: object.NewError("tes error", "", 0, 0),
 		},
-		// Test 'adalah_galat'
 		{
 			input: `adalah_galat(galat("err"))`,
 			expected: true,
@@ -21,14 +19,13 @@ func TestBuiltinErrorHandling(t *testing.T) {
 			input: `adalah_galat(1)`,
 			expected: false,
 		},
-		// Test 'pesan_galat'
 		{
 			input: `pesan_galat(galat("pesan rahasia"))`,
 			expected: "pesan rahasia",
 		},
 		{
 			input: `pesan_galat("bukan error")`,
-			expected: &object.Error{Message: "argument to `pesan_galat` must be ERROR, got STRING"},
+			expected: object.NewError("argument to `pesan_galat` must be ERROR, got STRING", "E003", 0, 0),
 		},
 	}
 
@@ -37,33 +34,23 @@ func TestBuiltinErrorHandling(t *testing.T) {
 
 func TestVMRuntimeErrors(t *testing.T) {
 	tests := []vmTestCase{
-		// Division by zero
 		{
 			input: `10 / 0`,
-			expected: &object.Error{Message: "division by zero"},
+			expected: object.NewError("integer divide by zero", "", 0, 0),
 		},
-		// Type mismatch (Arithmetic)
-		// 1 + "a" is now valid ("1a")
 		{
 			input: `"a" - "b"`,
-			expected: &object.Error{Message: "unknown string operator: 33"},
+			expected: object.NewError("minus not supported for type tag 3", "", 0, 0),
 		},
 		{
 			input: `-"a"`,
-			expected: &object.Error{Message: "unsupported type for negation: STRING"},
+			expected: object.NewError("minus not supported for type tag 3", "", 0, 0),
 		},
-		// Type mismatch (Comparison)
 		{
 			input: `1 > "a"`,
-			expected: &object.Error{Message: "unsupported comparison: INTEGER 38 STRING"},
+			expected: object.NewError("unsupported comparison", "", 0, 0),
 		},
 	}
 
 	runVmTests(t, tests)
-}
-
-func testExpectedObjectIncludesError(t *testing.T, obj object.Object, expected interface{}) {
-	// Custom helper if needed, but runVmTests calls testExpectedObject which handles exact match.
-	// For errors, testExpectedObject checks pointer equality? No, it casts.
-	// Let's rely on testExpectedObject extending.
 }

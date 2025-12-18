@@ -37,11 +37,11 @@ func TestMathBuiltinsErrors(t *testing.T) {
 	tests := []vmTestCase{
 		{
 			input: `sqrt(-1)`,
-			expected: &object.Error{Message: "cannot calculate square root of negative number"},
+			expected: object.NewError("cannot calculate square root of negative number", "", 0, 0),
 		},
 		{
 			input: `pow(2, "3")`,
-			expected: &object.Error{Message: "second argument to `pow` must be INTEGER or FLOAT, got STRING"},
+			expected: object.NewError("second argument to `pow` must be INTEGER or FLOAT, got STRING", "", 0, 0),
 		},
 	}
 

@@ -16,9 +16,9 @@ const GlobalSize = 65536
 const MaxFrames = 1024
 
 var (
-	True          = &object.Boolean{Value: true}
-	False         = &object.Boolean{Value: false}
-	Null          = &object.Null{}
+	True          *object.Boolean
+	False         *object.Boolean
+	Null          *object.Null
 	TruePtr       memory.Ptr
 	FalsePtr      memory.Ptr
 	NullPtr       memory.Ptr = memory.NilPtr
@@ -62,12 +62,22 @@ type VM struct {
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
+	if True == nil {
+		True = object.NewBoolean(true)
+		False = object.NewBoolean(false)
+		Null = object.NewNull()
+	}
+
 	ptr, err := memory.AllocCompiledFunction(bytecode.Instructions, 0, 0)
 	if err != nil {
 		panic(fmt.Sprintf("vm boot error: %v", err))
 	}
 	mainFn := &object.CompiledFunction{Address: ptr}
-	mainClosure := &object.Closure{Fn: mainFn}
+
+	closurePtr, err := memory.AllocClosure(mainFn.Address, []memory.Ptr{})
+	if err != nil { panic(err) }
+	mainClosure := &object.Closure{Address: closurePtr}
+
 	mainFrame := NewFrame(mainClosure, 0)
 
 	frames := make([]*Frame, MaxFrames)
@@ -79,10 +89,10 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 	bootstrapOnce.Do(func() {
 		if TruePtr == 0 {
-			TruePtr, _ = memory.AllocBoolean(true)
+			TruePtr = True.Address
 		}
 		if FalsePtr == 0 {
-			FalsePtr, _ = memory.AllocBoolean(false)
+			FalsePtr = False.Address
 		}
 	})
 
@@ -137,7 +147,7 @@ func (vm *VM) DumpState() {
 	if vm.framesIndex > 0 {
 		frame := vm.currentFrame()
 		fmt.Printf("IP: %d\n", frame.ip)
-		fmt.Printf("Function Locals: %d\n", frame.cl.Fn.NumLocals())
+		fmt.Printf("Function Locals: %d\n", frame.cl.Fn().NumLocals())
 	}
 	fmt.Printf("Stack Pointer: %d\n", vm.sp)
 	fmt.Printf("=============================\n")
@@ -177,7 +187,7 @@ func (vm *VM) Run() (err error) {
 			if _, err := vm.pop(); err != nil { return err }
 
 		case compiler.OpDup:
-			top := vm.stack[vm.sp-1] // Unsafe peek
+			top := vm.stack[vm.sp-1]
 			if err := vm.push(top); err != nil { return err }
 
 		case compiler.OpStoreGlobal:
@@ -224,11 +234,13 @@ func (vm *VM) Run() (err error) {
 			frame := vm.popFrame()
 			vm.sp = frame.basePointer - 1
 			if err := vm.push(returnValue); err != nil { return err }
+			if vm.framesIndex == 0 { return nil }
 
 		case compiler.OpReturn:
 			frame := vm.popFrame()
 			vm.sp = frame.basePointer - 1
 			if err := vm.push(NullPtr); err != nil { return err }
+			if vm.framesIndex == 0 { return nil }
 
 		case compiler.OpClosure:
 			constIndex := compiler.ReadUint16(ins[ip+1:])
@@ -240,21 +252,25 @@ func (vm *VM) Run() (err error) {
 			freeIndex := int(ins[ip+1])
 			vm.currentFrame().ip += 1
 			currentClosure := vm.currentFrame().cl
-			obj := currentClosure.FreeVariables[freeIndex]
+			obj := currentClosure.FreeVariables()[freeIndex]
 			if err := ensureOnHeap(obj); err != nil { return err }
 			if err := vm.push(getObjectAddress(obj)); err != nil { return err }
 
 		case compiler.OpArray:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
-			if err := vm.buildArray(vm.sp-numElements, vm.sp); err != nil { return err }
+			ptr, err := vm.buildArray(vm.sp-numElements, vm.sp)
+			if err != nil { return err }
 			vm.sp -= numElements
+			if err := vm.push(ptr); err != nil { return err }
 
 		case compiler.OpHash:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
-			if err := vm.buildHash(vm.sp-numElements, vm.sp); err != nil { return err }
+			ptr, err := vm.buildHash(vm.sp-numElements, vm.sp)
+			if err != nil { return err }
 			vm.sp -= numElements
+			if err := vm.push(ptr); err != nil { return err }
 
 		case compiler.OpIndex:
 			index, err := vm.pop()
@@ -287,8 +303,21 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpAnd, compiler.OpOr, compiler.OpXor, compiler.OpLShift, compiler.OpRShift:
 			if err := vm.executeBitwiseOperation(op); err != nil { return err }
 
+		case compiler.OpJump:
+			pos := int(compiler.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip = pos - 1
+
+		case compiler.OpJumpNotTruthy:
+			pos := int(compiler.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
+			condition, err := vm.pop()
+			if err != nil { return err }
+			if !isTruthy(condition) {
+				vm.currentFrame().ip = pos - 1
+			}
+
 		default:
-			// return fmt.Errorf("unknown opcode %d", op)
+			return fmt.Errorf("unknown opcode %d", op)
 		}
 	}
 	return nil
@@ -319,12 +348,9 @@ func (vm *VM) pushClosure(constIndex int, numFree int) error {
 	fn := constant.(*object.CompiledFunction)
 
 	freeVars := make([]memory.Ptr, numFree)
-	freeObjs := make([]object.Object, numFree)
 	for i := 0; i < numFree; i++ {
 		ptr := vm.stack[vm.sp-numFree+i]
 		freeVars[i] = ptr
-		obj, _ := Rehydrate(ptr)
-		freeObjs[i] = obj
 	}
 	vm.sp -= numFree
 
@@ -341,18 +367,8 @@ func (vm *VM) executeCall(numArgs int) error {
 	if err != nil { return err }
 
 	if header.Type == memory.TagClosure {
-		fnPtr, _, err := memory.ReadClosure(calleePtr)
-		if err != nil { return err }
-
-		fnWrapper := &object.CompiledFunction{Address: fnPtr}
-
-		_, freePtrs, _ := memory.ReadClosure(calleePtr)
-		freeObjs := make([]object.Object, len(freePtrs))
-		for i, p := range freePtrs {
-			freeObjs[i], _ = Rehydrate(p)
-		}
-
-		clWrapper := &object.Closure{Fn: fnWrapper, FreeVariables: freeObjs}
+		clWrapper := &object.Closure{Address: calleePtr}
+		fnWrapper := clWrapper.Fn()
 
 		if numArgs != fnWrapper.NumParameters() {
 			return fmt.Errorf("arg mismatch")
@@ -372,8 +388,8 @@ func (vm *VM) executeCall(numArgs int) error {
 }
 
 func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
-	idx, _ := memory.ReadBuiltin(builtinPtr)
-	builtin := object.Builtins[idx].Builtin
+	builtinObj, _ := Rehydrate(builtinPtr)
+	builtin := builtinObj.(*object.Builtin)
 
 	args := make([]object.Object, numArgs)
 	for i := 0; i < numArgs; i++ {
@@ -384,10 +400,10 @@ func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
 	res := builtin.Fn(args...)
 
 	if errObj, ok := res.(*object.Error); ok {
-		if errObj.Message == "luncurkan() requires VM context" {
+		if errObj.GetMessage() == "luncurkan() requires VM context" {
 			tObj, err := vm.spawn(args)
 			if err != nil {
-				res = &object.Error{Message: err.Error()}
+				res = object.NewError(err.Error(), "", 0, 0)
 			} else {
 				res = tObj
 			}
@@ -436,7 +452,7 @@ func executeTask(ptr memory.Ptr) {
 		constants: ctx.Constants,
 		globals: ctx.Globals,
 		stack: [StackSize]memory.Ptr{},
-		sp: ctx.Closure.Fn.NumLocals(),
+		sp: ctx.Closure.Fn().NumLocals(),
 		frames: frames,
 		framesIndex: 1,
 		Cabinet: &memory.Lemari,
@@ -444,7 +460,7 @@ func executeTask(ptr memory.Ptr) {
 
 	err := newVM.Run()
 	if err != nil {
-		ctx.ResultCh <- &object.Error{Message: err.Error()}
+		ctx.ResultCh <- object.NewError(err.Error(), "", 0, 0)
 	} else {
 		if newVM.LastPoppedStackElem != nil {
 			ctx.ResultCh <- newVM.LastPoppedStackElem
@@ -456,7 +472,6 @@ func executeTask(ptr memory.Ptr) {
 }
 
 func (vm *VM) snapshot() error {
-	// Not implemented for Phase X.4 MVP (Requires rewriting snapshot struct)
 	return nil
 }
 
@@ -464,32 +479,12 @@ func (vm *VM) rollback() error { return nil }
 func (vm *VM) commit() error { return nil }
 
 func ensureOnHeap(obj object.Object) error {
-	switch o := obj.(type) {
-	case *object.Integer:
-		if o.Address != 0 { return nil }
-		ptr, err := memory.AllocInteger(o.Value)
-		if err != nil { return err }
-		o.Address = ptr
-	case *object.String:
-		if o.Address != 0 { return nil }
-		ptr, err := memory.AllocString(o.Value)
-		if err != nil { return err }
-		o.Address = ptr
-	case *object.Boolean:
-		if o.Address != 0 { return nil }
-		ptr, err := memory.AllocBoolean(o.Value)
-		if err != nil { return err }
-		o.Address = ptr
+	if obj.GetAddress() == memory.NilPtr {
+		return fmt.Errorf("ensureOnHeap: object %s has nil address", obj.Type())
 	}
 	return nil
 }
 
 func getObjectAddress(obj object.Object) memory.Ptr {
-	switch o := obj.(type) {
-	case *object.Integer: return o.Address
-	case *object.String: return o.Address
-	case *object.Boolean: return o.Address
-	case *object.Null: return memory.NilPtr
-	}
-	return 0
+	return obj.GetAddress()
 }
