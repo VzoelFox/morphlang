@@ -362,14 +362,14 @@ morph/
 **Patch X.2: Complex Types & Snapshot (Tahap 2)**
 - [x] Migrate String to Custom Allocator.
 - [x] Migrate Array to Custom Allocator.
-- [ ] Implement `OP_SNAPSHOT`, `OP_ROLLBACK`, `OP_COMMIT`.
-- [ ] Update VM to support State Checkpointing.
+- [x] Implement Snapshot/Rollback (via Builtins `potret`, `pulih`).
+- [x] Update VM to support State Checkpointing.
 
 **Patch X.3: Full Swap & Scheduler (Tahap 3)**
-- [ ] Remove Go GC dependency.
-- [ ] Implement FIFO Queue mechanism.
-- [ ] Implement Atomic Shard Assignment (CAS).
-- [ ] Implement Worker Units logic (Morph Routine).
+- [x] Remove Go GC dependency (VM Logic Swapped to Memory Read).
+- [x] Implement FIFO Queue mechanism.
+- [x] Implement Atomic Shard Assignment (CAS).
+- [x] Implement Worker Units logic (Morph Routine) - Decoupled Executor.
 
 ---
 
