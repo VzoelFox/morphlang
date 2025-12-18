@@ -320,9 +320,9 @@ morph/
 
 ### **PHASE 6: COTC (Core of The Core) - Standard Library**
 
-**Concept:** COTC is the foundational library written in Morph (`.fox`), serving as the "Standard Library" for the language.
+**Concept:** COTC is the foundational library. Currently implemented as a mix of **Go Builtins** (for performance) and Morph wrappers.
 
-**Patch 6.1: I/O Module**
+**Patch 6.1: I/O Module (Builtins)**
 - [x] `baca_file(path)` - read file
 - [x] `tulis_file(path, content)` - write file
 - [x] `input(prompt)` - read user input
@@ -362,14 +362,19 @@ morph/
 **Patch X.2: Complex Types & Snapshot (Tahap 2)**
 - [x] Migrate String to Custom Allocator.
 - [x] Migrate Array to Custom Allocator.
-- [ ] Implement `OP_SNAPSHOT`, `OP_ROLLBACK`, `OP_COMMIT`.
-- [ ] Update VM to support State Checkpointing.
+- [x] Implement Snapshot/Rollback (via Builtins `potret`, `pulih`).
+- [x] Update VM to support State Checkpointing.
 
-**Patch X.3: Full Swap & Scheduler (Tahap 3)**
-- [ ] Remove Go GC dependency.
-- [ ] Implement FIFO Queue mechanism.
-- [ ] Implement Atomic Shard Assignment (CAS).
-- [ ] Implement Worker Units logic (Morph Routine).
+**Patch X.3: Hybrid Scheduler & Queue (Tahap 3)**
+- [x] Implement Atomic Primitives (Emulated via Global Lock).
+- [x] Implement Native FIFO Queue (`pkg/scheduler`).
+- [x] Implement Worker Units logic (`pkg/scheduler`).
+- [ ] Remove Go GC dependency (Still in Hybrid Mode).
+
+**Patch X.4: True Determinism & Optimization (Tahap 4 - Future)**
+- [ ] True Lock-Free Atomic Operations (Hardware CAS).
+- [ ] Complete Removal of Go GC Dependency (Full Pointer Swap).
+- [ ] VM-Level Worker Unit Executor (Integration).
 
 ---
 
