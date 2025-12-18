@@ -91,7 +91,13 @@ func (c *Cabinet) bringToRAM(drawerID int) error {
 
 	// If no free slot, EVICT victim
 	if freeSlot == -1 {
-		victimID := c.RAMSlots[0]
+		// Use LFU Strategy to find victim
+		victimSlot := c.findVictimLFU()
+		if victimSlot == -1 {
+			return fmt.Errorf("OOM: No suitable victim found for eviction")
+		}
+
+		victimID := c.RAMSlots[victimSlot]
 		if victimID == drawerID {
 			return fmt.Errorf("deadlock: trying to evict self")
 		}
@@ -100,7 +106,7 @@ func (c *Cabinet) bringToRAM(drawerID int) error {
 		if err != nil {
 			return err
 		}
-		freeSlot = 0
+		freeSlot = victimSlot
 	}
 
 	// Calculate Physical Address for this slot
