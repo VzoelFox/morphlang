@@ -114,3 +114,22 @@ func ReadArrayElement(arrayPtr Ptr, index int) (Ptr, error) {
 	elemPtr := unsafe.Pointer(elementsStart + uintptr(index*8))
 	return *(*Ptr)(elemPtr), nil
 }
+
+// ReadArrayLength reads the length of the array.
+func ReadArrayLength(arrayPtr Ptr) (int, error) {
+	if arrayPtr == NilPtr {
+		return 0, nil
+	}
+
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	raw, err := Lemari.resolve(arrayPtr)
+	if err != nil {
+		return 0, err
+	}
+
+	// Read Length (Offset 12)
+	lenPtr := unsafe.Pointer(uintptr(raw) + uintptr(HeaderSize) + 4)
+	return int(*(*int32)(lenPtr)), nil
+}

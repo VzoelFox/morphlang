@@ -17,7 +17,7 @@ func NewFrame(cl *object.Closure, basePointer int) *Frame {
 }
 
 func (f *Frame) Instructions() compiler.Instructions {
-	instr, _, _, err := memory.ReadCompiledFunction(f.cl.Fn.Address)
+	instr, _, _, err := memory.ReadCompiledFunction(f.cl.Fn().Address)
 	if err != nil {
 		// Panic is acceptable here as it indicates memory corruption/system failure during execution
 		panic(err)

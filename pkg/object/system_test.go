@@ -25,11 +25,11 @@ func TestSystemBuiltins(t *testing.T) {
 
 	// Check keys presence
 	foundTotal := false
-	for _, pair := range hashObj.Pairs {
-		keyStr := pair.Key.(*String).Value
+	for _, pair := range hashObj.GetPairs() {
+		keyStr := pair.Key.(*String).GetValue()
 		if keyStr == "total" {
 			foundTotal = true
-			val := pair.Value.(*Integer).Value
+			val := pair.Value.(*Integer).GetValue()
 			if val <= 0 {
 				t.Errorf("Memory total should be > 0, got %d", val)
 			}

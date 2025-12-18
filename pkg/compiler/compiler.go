@@ -41,7 +41,6 @@ type Compiler struct {
 	scopes              []CompilationScope
 	scopeIndex          int
 
-	// Safe Mode (Analyzer Integration)
 	Input    string
 	Filename string
 	analyzed bool
@@ -69,14 +68,10 @@ func (c *Compiler) SetSource(filename, input string) {
 }
 
 func (c *Compiler) Compile(node parser.Node) error {
-	// Safety Check (Safe Mode)
 	if c.Input != "" && !c.analyzed {
 		c.analyzed = true
 		if prog, ok := node.(*parser.Program); ok {
-			// Run Analyzer
-			// We pass empty parser errors because we assume parser succeeded if we are here.
 			ctx, _ := analysis.GenerateContext(prog, c.Filename, c.Input, []parser.ParserError{})
-			// If context has errors (semantic errors), abort.
 			if len(ctx.Errors) > 0 {
 				return fmt.Errorf("safety check failed: %s", ctx.Errors[0].Message)
 			}
@@ -97,7 +92,6 @@ func (c *Compiler) Compile(node parser.Node) error {
 			return nil
 		}
 
-		// Handle named function declarations: define variable and store it
 		if fn, ok := node.Expression.(*parser.FunctionLiteral); ok && fn.Name != "" {
 			symbol := c.symbolTable.Define(fn.Name)
 
@@ -194,7 +188,6 @@ func (c *Compiler) Compile(node parser.Node) error {
 			return err
 		}
 
-		// Jump over consequence if condition is false
 		jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
 
 		err = c.Compile(node.Consequence)
@@ -205,18 +198,16 @@ func (c *Compiler) Compile(node parser.Node) error {
 		if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
 			c.removeLastPop()
 		} else {
-			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+			c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 		}
 
-		// Jump over alternative if consequence was executed
 		jumpPos := c.emit(OpJump, 9999)
 
 		afterConsequencePos := len(c.currentInstructions())
 		c.changeOperand(jumpNotTruthyPos, afterConsequencePos)
 
 		if node.Alternative == nil {
-			// If no alternative, we need to push NULL so the expression has a value
-			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+			c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 		} else {
 			err = c.Compile(node.Alternative)
 			if err != nil {
@@ -226,7 +217,7 @@ func (c *Compiler) Compile(node parser.Node) error {
 			if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
 				c.removeLastPop()
 			} else {
-				c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+				c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 			}
 		}
 
@@ -234,27 +225,21 @@ func (c *Compiler) Compile(node parser.Node) error {
 		c.changeOperand(jumpPos, afterAlternativePos)
 
 	case *parser.WhileExpression:
-		// 1. Initialize result with Null
-		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 
 		loopStartPos := len(c.currentInstructions())
 
-		// 2. Condition
 		err := c.Compile(node.Condition)
 		if err != nil {
 			return err
 		}
 
-		// 3. Jump if False to End
 		jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
 
-		// 4. Enter Loop Scope
 		c.enterLoop()
 
-		// 5. Pop previous result
 		c.emit(OpPop)
 
-		// 6. Body
 		err = c.Compile(node.Body)
 		if err != nil {
 			return err
@@ -263,25 +248,20 @@ func (c *Compiler) Compile(node parser.Node) error {
 		if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
 			c.removeLastPop()
 		} else {
-			c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+			c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 		}
 
-		// 7. Jump back to Start
 		c.emit(OpJump, loopStartPos)
 
-		// 8. Leave Loop & Back-patching
 		loopScope := c.leaveLoop()
 		afterLoopPos := len(c.currentInstructions())
 
-		// Patch JumpNotTruthy (Normal Exit)
 		c.changeOperand(jumpNotTruthyPos, afterLoopPos)
 
-		// Patch Breaks (Go to End)
 		for _, pos := range loopScope.BreakPos {
 			c.changeOperand(pos, afterLoopPos)
 		}
 
-		// Patch Continues (Go to Start)
 		for _, pos := range loopScope.ContinuePos {
 			c.changeOperand(pos, loopStartPos)
 		}
@@ -418,27 +398,27 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 	case *parser.IntegerLiteral:
-		integer := &object.Integer{Value: node.Value}
+		integer := object.NewInteger(node.Value)
 		c.emit(OpLoadConst, c.addConstant(integer))
 
 	case *parser.FloatLiteral:
-		floatVal := &object.Float{Value: node.Value}
+		floatVal := object.NewFloat(node.Value)
 		c.emit(OpLoadConst, c.addConstant(floatVal))
 
 	case *parser.BooleanLiteral:
-		boolean := &object.Boolean{Value: node.Value}
+		boolean := object.NewBoolean(node.Value)
 		c.emit(OpLoadConst, c.addConstant(boolean))
 
 	case *parser.NullLiteral:
-		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 
 	case *parser.StringLiteral:
-		str := &object.String{Value: node.Value}
+		str := object.NewString(node.Value)
 		c.emit(OpLoadConst, c.addConstant(str))
 
 	case *parser.InterpolatedString:
 		if len(node.Parts) == 0 {
-			c.emit(OpLoadConst, c.addConstant(&object.String{Value: ""}))
+			c.emit(OpLoadConst, c.addConstant(object.NewString("")))
 		} else {
 			err := c.Compile(node.Parts[0])
 			if err != nil {
@@ -500,7 +480,7 @@ func (c *Compiler) Compile(node parser.Node) error {
 		if scope == nil {
 			return fmt.Errorf("'berhenti' hanya boleh digunakan di dalam loop")
 		}
-		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 		pos := c.emit(OpJump, 9999)
 		scope.BreakPos = append(scope.BreakPos, pos)
 
@@ -509,12 +489,11 @@ func (c *Compiler) Compile(node parser.Node) error {
 		if scope == nil {
 			return fmt.Errorf("'lanjut' hanya boleh digunakan di dalam loop")
 		}
-		c.emit(OpLoadConst, c.addConstant(&object.Null{}))
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
 		pos := c.emit(OpJump, 9999)
 		scope.ContinuePos = append(scope.ContinuePos, pos)
 
 	case *parser.ImportStatement:
-		// 1. Resolve Path and Name
 		path := node.Path
 		if !strings.HasSuffix(path, ".fox") {
 			path += ".fox"
@@ -523,19 +502,15 @@ func (c *Compiler) Compile(node parser.Node) error {
 		ext := filepath.Ext(base)
 		moduleName := base[0 : len(base)-len(ext)]
 
-		// 2. Load and Compile Module
 		modIdx, err := c.loadModule(path)
 		if err != nil {
 			return err
 		}
 
-		// 3. Emit Import and Binding
-		// c.emit(OpImport, modIdx)
-		c.emit(OpClosure, modIdx, 0) // Wrap CompiledFunction in Closure
-		c.emit(OpCall, 0)            // Execute Module Wrapper
+		c.emit(OpClosure, modIdx, 0)
+		c.emit(OpCall, 0)
 
 		if len(node.Identifiers) == 0 {
-			// "ambil 'path'" -> bind whole module to name
 			symbol := c.symbolTable.Define(moduleName)
 			if symbol.Scope == GlobalScope {
 				c.emit(OpStoreGlobal, symbol.Index)
@@ -543,11 +518,10 @@ func (c *Compiler) Compile(node parser.Node) error {
 				c.emit(OpStoreLocal, symbol.Index)
 			}
 		} else {
-			// "dari 'path' ambil x, y"
 			for _, ident := range node.Identifiers {
-				c.emit(OpDup) // Keep Hash on stack
-				c.emit(OpLoadConst, c.addConstant(&object.String{Value: ident}))
-				c.emit(OpIndex) // Pops DupHash, Key. Pushes Value.
+				c.emit(OpDup)
+				c.emit(OpLoadConst, c.addConstant(object.NewString(ident)))
+				c.emit(OpIndex)
 
 				symbol := c.symbolTable.Define(ident)
 				if symbol.Scope == GlobalScope {
@@ -556,7 +530,7 @@ func (c *Compiler) Compile(node parser.Node) error {
 					c.emit(OpStoreLocal, symbol.Index)
 				}
 			}
-			c.emit(OpPop) // Pop the original Module Hash
+			c.emit(OpPop)
 		}
 
 	case *parser.FunctionLiteral:
@@ -729,7 +703,6 @@ func (c *Compiler) changeOperand(opPos int, operand int) {
 }
 
 func (c *Compiler) loadModule(path string) (int, error) {
-	// COTC Mapping: cotc/xxx -> lib/cotc/xxx
 	if strings.HasPrefix(path, "cotc/") {
 		path = "lib/" + path
 	}
@@ -746,7 +719,6 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		return 0, fmt.Errorf("import parse error in %s: %v", path, p.Errors())
 	}
 
-	// AST Transformation: Wrap in Function and Return Exports
 	exports := make(map[parser.Expression]parser.Expression)
 	dummyToken := lexer.Token{Type: lexer.STRING, Literal: "dummy"}
 
@@ -782,7 +754,6 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		Body:  &parser.BlockStatement{Statements: prog.Statements},
 	}
 
-	// Compile Wrapper
 	subComp := New()
 	err = subComp.Compile(wrapperFn)
 	if err != nil {
@@ -791,13 +762,11 @@ func (c *Compiler) loadModule(path string) (int, error) {
 
 	bc := subComp.Bytecode()
 
-	// Merge Constants and Remap
 	indexMap := make(map[int]int)
 	for i, constant := range bc.Constants {
 		indexMap[i] = c.addConstant(constant)
 	}
 
-	// Remap Nested Functions in Constants
 	for oldIdx, constant := range bc.Constants {
 		if fn, ok := constant.(*object.CompiledFunction); ok {
 			newIdx := indexMap[oldIdx]
@@ -822,39 +791,11 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		}
 	}
 
-	// Create Module Function (It is the wrapper compiled function)
-	// subComp.Compile(wrapperFn) leaves the wrapper function object on stack?
-	// No, Compile(Node) emits instructions.
-	// Compile(FunctionLiteral) emits instructions to Create Closure.
-	// But we want the CompiledFunction itself as a constant.
-	// Wait. `Compile(FunctionLiteral)` emits `OpClosure`.
-	// The `CompiledFunction` is added to constants.
-	// `bc.Instructions` contains `OpClosure ... OpPop`. (If expression statement).
-	// We want the *CompiledFunction object* corresponding to `wrapperFn`.
-	// It is the LAST constant added to `subComp`?
-	// `subComp.constants` contains it.
-	// `subComp` compiled ONE expression (FunctionLiteral).
-	// So `bc.Instructions` is `OpClosure <constIdx> 0`.
-	// We want that `constIdx`.
-
-	// We need to parse instructions to find the `OpClosure`.
-	// It should be the first instruction.
 	if len(bc.Instructions) < 3 || Opcode(bc.Instructions[0]) != OpClosure {
 		return 0, fmt.Errorf("import wrapper compilation failed struct")
 	}
 
 	wrapperConstIdx := int(ReadUint16(bc.Instructions[1:]))
-
-	// Ensure NumLocals is set correctly for the wrapper function
-	// The wrapper function is the one at wrapperConstIdx (remapped)
-	// We need to access the object in c.constants and update it?
-	// No, bc.Constants[wrapperConstIdx] (old) -> newFn.
-	// But wait, wrapperConstIdx IS the index in `subComp` constants.
-	// `indexMap` maps it to `c` constants.
-
-	// The `CompiledFunction` created for wrapper in `subComp` has correct NumLocals (calculated by subComp).
-	// My loop "Remap Nested Functions" cloned it and copied NumLocals.
-	// So it SHOULD be correct.
 
 	return indexMap[wrapperConstIdx], nil
 }
@@ -870,10 +811,8 @@ func (c *Compiler) remapInstructions(ins []byte, indexMap map[int]int) {
 		}
 
 		if op == OpLoadConst || op == OpClosure {
-			// Safe operand reading
 			operands, _ := ReadOperands(def, ins[offset+1:])
 
-			// Verify operand width to prevent corruption
 			if len(def.OperandWidths) == 1 && def.OperandWidths[0] == 2 {
 				oldIdx := operands[0]
 				if newIdx, ok := indexMap[oldIdx]; ok {

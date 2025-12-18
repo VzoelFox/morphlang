@@ -146,15 +146,15 @@ func TestHashLiterals(t *testing.T) {
 		{
 			"{1: 2, 2: 3}",
 			map[object.HashKey]int64{
-				(&object.Integer{Value: 1}).HashKey(): 2,
-				(&object.Integer{Value: 2}).HashKey(): 3,
+				object.NewInteger(1).HashKey(): 2,
+				object.NewInteger(2).HashKey(): 3,
 			},
 		},
 		{
 			"{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
 			map[object.HashKey]int64{
-				(&object.Integer{Value: 2}).HashKey(): 4,
-				(&object.Integer{Value: 6}).HashKey(): 16,
+				object.NewInteger(2).HashKey(): 4,
+				object.NewInteger(6).HashKey(): 16,
 			},
 		},
 	}
@@ -325,12 +325,13 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 			t.Errorf("object is not Array. got=%T (%+v)", obj, obj)
 			return
 		}
-		if len(result.Elements) != len(expected) {
-			t.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(result.Elements))
+		elements := result.GetElements()
+		if len(elements) != len(expected) {
+			t.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(elements))
 			return
 		}
 		for i, expectedVal := range expected {
-			testIntegerObject(t, result.Elements[i], expectedVal)
+			testIntegerObject(t, elements[i], expectedVal)
 		}
 	case []string:
 		result, ok := obj.(*object.Array)
@@ -338,12 +339,13 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 			t.Errorf("object is not Array. got=%T (%+v)", obj, obj)
 			return
 		}
-		if len(result.Elements) != len(expected) {
-			t.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(result.Elements))
+		elements := result.GetElements()
+		if len(elements) != len(expected) {
+			t.Errorf("wrong num of elements. want=%d, got=%d", len(expected), len(elements))
 			return
 		}
 		for i, expectedVal := range expected {
-			testStringObject(t, result.Elements[i], expectedVal)
+			testStringObject(t, elements[i], expectedVal)
 		}
 	case map[object.HashKey]int64:
 		result, ok := obj.(*object.Hash)
@@ -351,17 +353,25 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 			t.Errorf("object is not Hash. got=%T (%+v)", obj, obj)
 			return
 		}
-		if len(result.Pairs) != len(expected) {
-			t.Errorf("wrong num of pairs. want=%d, got=%d", len(expected), len(result.Pairs))
+		pairs := result.GetPairs()
+		if len(pairs) != len(expected) {
+			t.Errorf("wrong num of pairs. want=%d, got=%d", len(expected), len(pairs))
 			return
 		}
+
+		pairsMap := make(map[object.HashKey]object.Object)
+		for _, pair := range pairs {
+			hashKey := pair.Key.(object.Hashable).HashKey()
+			pairsMap[hashKey] = pair.Value
+		}
+
 		for key, expectedVal := range expected {
-			pair, ok := result.Pairs[key]
+			val, ok := pairsMap[key]
 			if !ok {
 				t.Errorf("no pair for key %v", key)
 				continue
 			}
-			testIntegerObject(t, pair.Value, expectedVal)
+			testIntegerObject(t, val, expectedVal)
 		}
 	case nil:
 		if obj == nil {
@@ -393,8 +403,8 @@ func testIntegerObject(t *testing.T, obj object.Object, expected int64) {
 		return
 	}
 
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%d, want=%d", result.Value, expected)
+	if result.GetValue() != expected {
+		t.Errorf("object has wrong value. got=%d, want=%d", result.GetValue(), expected)
 	}
 }
 
@@ -409,8 +419,8 @@ func testFloatObject(t *testing.T, obj object.Object, expected float64) {
 		return
 	}
 
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%f, want=%f", result.Value, expected)
+	if result.GetValue() != expected {
+		t.Errorf("object has wrong value. got=%f, want=%f", result.GetValue(), expected)
 	}
 }
 
@@ -425,8 +435,8 @@ func testBooleanObject(t *testing.T, obj object.Object, expected bool) {
 		return
 	}
 
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%t, want=%t", result.Value, expected)
+	if result.GetValue() != expected {
+		t.Errorf("object has wrong value. got=%t, want=%t", result.GetValue(), expected)
 	}
 }
 
@@ -441,7 +451,7 @@ func testStringObject(t *testing.T, obj object.Object, expected string) {
 		return
 	}
 
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%q, want=%q", result.Value, expected)
+	if result.GetValue() != expected {
+		t.Errorf("object has wrong value. got=%q, want=%q", result.GetValue(), expected)
 	}
 }
