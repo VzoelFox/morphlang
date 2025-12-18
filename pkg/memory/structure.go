@@ -52,6 +52,13 @@ type Drawer struct {
 
 // Cabinet represents the entire Heap (Lemari).
 type Cabinet struct {
+	// TODO: PERFORMANCE BOTTLENECK
+	// Currently using a global Mutex for simplicity during Phase X.
+	// This serializes all memory access and will be a contention point for multi-threaded workloads.
+	// FUTURE OPTIMIZATION:
+	// 1. Upgrade to sync.RWMutex to allow concurrent reads (resolve).
+	// 2. Implement per-Drawer locking for finer granularity.
+	// 3. Separate "Fast Path" (Resident Read) from "Slow Path" (Swap In Write).
 	mu sync.Mutex
 
 	// Virtual Drawers
