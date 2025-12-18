@@ -12,6 +12,8 @@ const (
 	TagBoolean TypeTag = 2
 	TagString  TypeTag = 3
 	TagFloat   TypeTag = 4
+	TagNull    TypeTag = 5
+	TagArray   TypeTag = 6
 	// ... add others later
 )
 

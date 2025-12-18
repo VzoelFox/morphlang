@@ -353,15 +353,15 @@ morph/
 3. **Tahap 3 (Full Swap):** Melepas ketergantungan pada Go GC sepenuhnya.
 
 **Patch X.1: Hybrid Integration (Tahap 1)**
-- [ ] Fix Memory Leak: Link `object.Integer` to `memory.Ptr`.
-- [ ] Implement `AllocFloat` in `pkg/memory`.
-- [ ] Implement `DrawerLease` struct (`pkg/memory/lease.go`).
-- [ ] Implement `AcquireDrawer(unitID)` - Exclusive ownership.
-- [ ] Integrate with `Cabinet` structure.
+- [x] Fix Memory Leak: Link `object.Integer` to `memory.Ptr`.
+- [x] Implement `AllocFloat` in `pkg/memory`.
+- [x] Implement `DrawerLease` struct (`pkg/memory/lease.go`).
+- [x] Implement `AcquireDrawer(unitID)` - Exclusive ownership.
+- [x] Integrate with `Cabinet` structure.
 
 **Patch X.2: Complex Types & Snapshot (Tahap 2)**
-- [ ] Migrate String to Custom Allocator.
-- [ ] Migrate Array to Custom Allocator.
+- [x] Migrate String to Custom Allocator.
+- [x] Migrate Array to Custom Allocator.
 - [ ] Implement `OP_SNAPSHOT`, `OP_ROLLBACK`, `OP_COMMIT`.
 - [ ] Update VM to support State Checkpointing.
 

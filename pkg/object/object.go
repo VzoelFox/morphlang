@@ -70,7 +70,8 @@ func (f *Float) Inspect() string {
 }
 
 type Boolean struct {
-	Value bool
+	Value   bool
+	Address memory.Ptr
 }
 
 func (b *Boolean) Type() ObjectType { return BOOLEAN_OBJ }
@@ -92,7 +93,9 @@ func (b *Boolean) HashKey() HashKey {
 	return HashKey{Type: b.Type(), Value: value}
 }
 
-type Null struct{}
+type Null struct {
+	Address memory.Ptr
+}
 
 func (n *Null) Type() ObjectType { return NULL_OBJ }
 func (n *Null) Inspect() string  { return "kosong" }
@@ -224,7 +227,8 @@ func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
 func (b *Builtin) Inspect() string  { return "builtin function" }
 
 type String struct {
-	Value string
+	Value   string
+	Address memory.Ptr
 }
 
 func (s *String) Type() ObjectType { return STRING_OBJ }
@@ -284,6 +288,7 @@ func (c *Closure) Inspect() string {
 
 type Array struct {
 	Elements []Object
+	Address  memory.Ptr
 }
 
 func (ao *Array) Type() ObjectType { return ARRAY_OBJ }

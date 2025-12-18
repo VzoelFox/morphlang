@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/VzoelFox/morphlang/pkg/compiler"
 	"github.com/VzoelFox/morphlang/pkg/memory"
@@ -13,9 +14,10 @@ const GlobalSize = 65536
 const MaxFrames = 1024
 
 var (
-	True  = &object.Boolean{Value: true}
-	False = &object.Boolean{Value: false}
-	Null  = &object.Null{}
+	True          = &object.Boolean{Value: true}
+	False         = &object.Boolean{Value: false}
+	Null          = &object.Null{}
+	bootstrapOnce sync.Once
 )
 
 type VMSnapshot struct {
@@ -60,6 +62,19 @@ func New(bytecode *compiler.Bytecode) *VM {
 	if len(memory.Lemari.Drawers) == 0 {
 		memory.InitCabinet()
 	}
+
+	// Phase 2: Bootstrap Singletons (Thread-Safe)
+	bootstrapOnce.Do(func() {
+		if True.Address == 0 {
+			ptr, _ := memory.AllocBoolean(true)
+			True.Address = ptr
+		}
+		if False.Address == 0 {
+			ptr, _ := memory.AllocBoolean(false)
+			False.Address = ptr
+		}
+	})
+
 	// Acquire Drawer 0 for Main Thread (Simulation)
 	drawer := &memory.Lemari.Drawers[0]
 
@@ -276,10 +291,13 @@ func (vm *VM) Run() (err error) {
 				return fmt.Errorf("stack underflow on array build")
 			}
 
-			array := vm.buildArray(vm.sp-numElements, vm.sp)
+			array, err := vm.buildArray(vm.sp-numElements, vm.sp)
+			if err != nil {
+				return err
+			}
 			vm.sp = vm.sp - numElements
 
-			err := vm.push(array)
+			err = vm.push(array)
 			if err != nil {
 				return err
 			}
@@ -700,7 +718,21 @@ func (vm *VM) executeBinaryArrayOperation(op compiler.Opcode, left, right object
 	copy(newElements, leftVal)
 	copy(newElements[len(leftVal):], rightVal)
 
-	return vm.push(&object.Array{Elements: newElements})
+	// Phase 2: Memory Allocation for Concatenated Array
+	ptr, err := memory.AllocArray(len(newElements), len(newElements))
+	if err != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", err)})
+	}
+
+	// Copy pointers
+	for i, obj := range newElements {
+		elemPtr := getObjectAddress(obj)
+		if elemPtr != 0 {
+			memory.WriteArrayElement(ptr, i, elemPtr)
+		}
+	}
+
+	return vm.push(&object.Array{Elements: newElements, Address: ptr})
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right object.Object) error {
@@ -798,7 +830,13 @@ func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right objec
 		rightVal = right.Inspect()
 	}
 
-	return vm.push(&object.String{Value: leftVal + rightVal})
+	newVal := leftVal + rightVal
+	ptr, err := memory.AllocString(newVal)
+	if err != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", err)})
+	}
+
+	return vm.push(&object.String{Value: newVal, Address: ptr})
 }
 
 func (vm *VM) executeComparison(op compiler.Opcode) error {
@@ -922,11 +960,21 @@ func (vm *VM) executeMinusOperator() error {
 
 	if operand.Type() == object.FLOAT_OBJ {
 		value := operand.(*object.Float).Value
-		return vm.push(&object.Float{Value: -value})
+		// Phase X: Alloc
+		ptr, err := memory.AllocFloat(-value)
+		if err != nil {
+			return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", err)})
+		}
+		return vm.push(&object.Float{Value: -value, Address: ptr})
 	}
 
 	value := operand.(*object.Integer).Value
-	return vm.push(&object.Integer{Value: -value})
+	// Phase X: Alloc
+	ptr, err := memory.AllocInteger(-value)
+	if err != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", err)})
+	}
+	return vm.push(&object.Integer{Value: -value, Address: ptr})
 }
 
 func (vm *VM) executeBitNotOperator() error {
@@ -940,7 +988,12 @@ func (vm *VM) executeBitNotOperator() error {
 	}
 
 	value := operand.(*object.Integer).Value
-	return vm.push(&object.Integer{Value: ^value})
+	// Phase X: Alloc
+	ptr, err := memory.AllocInteger(^value)
+	if err != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", err)})
+	}
+	return vm.push(&object.Integer{Value: ^value, Address: ptr})
 }
 
 func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
@@ -989,17 +1042,36 @@ func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
 
 	// fmt.Printf("DEBUG Result: %d\n", result)
 
-	return vm.push(&object.Integer{Value: result})
-}
-
-func (vm *VM) buildArray(startIndex, endIndex int) object.Object {
-	elements := make([]object.Object, endIndex-startIndex)
-
-	for i := 0; i < len(elements); i++ {
-		elements[i] = vm.stack[startIndex+i]
+	// Phase X: Alloc
+	ptr, err := memory.AllocInteger(result)
+	if err != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", err)})
 	}
 
-	return &object.Array{Elements: elements}
+	return vm.push(&object.Integer{Value: result, Address: ptr})
+}
+
+func (vm *VM) buildArray(startIndex, endIndex int) (object.Object, error) {
+	elements := make([]object.Object, endIndex-startIndex)
+	length := len(elements)
+
+	// Phase 2: Memory Alloc
+	ptr, err := memory.AllocArray(length, length)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < length; i++ {
+		obj := vm.stack[startIndex+i]
+		elements[i] = obj
+
+		elemPtr := getObjectAddress(obj)
+		if elemPtr != 0 {
+			memory.WriteArrayElement(ptr, i, elemPtr)
+		}
+	}
+
+	return &object.Array{Elements: elements, Address: ptr}, nil
 }
 
 func (vm *VM) buildHash(startIndex, endIndex int) (object.Object, error) {
@@ -1068,6 +1140,14 @@ func (vm *VM) executeArraySetIndex(array, index, val object.Object) error {
 	}
 
 	arrayObject.Elements[i] = val
+
+	// Phase 2: Update Memory
+	if arrayObject.Address != 0 {
+		elemPtr := getObjectAddress(val)
+		// We write NilPtr (0) if elemPtr is 0, to keep sync
+		memory.WriteArrayElement(arrayObject.Address, int(i), elemPtr)
+	}
+
 	return nil
 }
 
@@ -1127,4 +1207,22 @@ func nativeBoolToBooleanObject(input bool) *object.Boolean {
 		return True
 	}
 	return False
+}
+
+func getObjectAddress(obj object.Object) memory.Ptr {
+	switch o := obj.(type) {
+	case *object.Integer:
+		return o.Address
+	case *object.Float:
+		return o.Address
+	case *object.Boolean:
+		return o.Address
+	case *object.String:
+		return o.Address
+	case *object.Array:
+		return o.Address
+	case *object.Null:
+		return o.Address
+	}
+	return 0
 }
