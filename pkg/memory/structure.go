@@ -59,7 +59,7 @@ type Cabinet struct {
 	// 1. Upgrade to sync.RWMutex to allow concurrent reads (resolve).
 	// 2. Implement per-Drawer locking for finer granularity.
 	// 3. Separate "Fast Path" (Resident Read) from "Slow Path" (Swap In Write).
-	mu sync.Mutex
+	mu sync.RWMutex
 
 	// Virtual Drawers
 	Drawers []Drawer
