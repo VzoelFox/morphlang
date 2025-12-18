@@ -313,6 +313,8 @@ func testExpectedObject(t *testing.T, obj object.Object, expected interface{}) {
 		testIntegerObject(t, obj, int64(expected))
 	case int64:
 		testIntegerObject(t, obj, expected)
+	case float64:
+		testFloatObject(t, obj, expected)
 	case bool:
 		testBooleanObject(t, obj, expected)
 	case string:
@@ -393,6 +395,22 @@ func testIntegerObject(t *testing.T, obj object.Object, expected int64) {
 
 	if result.Value != expected {
 		t.Errorf("object has wrong value. got=%d, want=%d", result.Value, expected)
+	}
+}
+
+func testFloatObject(t *testing.T, obj object.Object, expected float64) {
+	if obj == nil {
+		t.Errorf("object is nil, want Float %f", expected)
+		return
+	}
+	result, ok := obj.(*object.Float)
+	if !ok {
+		t.Errorf("object is not Float. got=%T (%+v)", obj, obj)
+		return
+	}
+
+	if result.Value != expected {
+		t.Errorf("object has wrong value. got=%f, want=%f", result.Value, expected)
 	}
 }
 

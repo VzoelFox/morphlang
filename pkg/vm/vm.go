@@ -626,8 +626,12 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		return vm.executeBinaryIntegerOperation(op, left, right)
 	}
 
-	if leftType == object.STRING_OBJ {
+	if leftType == object.STRING_OBJ || rightType == object.STRING_OBJ {
 		return vm.executeBinaryStringOperation(op, left, right)
+	}
+
+	if leftType == object.FLOAT_OBJ || rightType == object.FLOAT_OBJ {
+		return vm.executeBinaryFloatOperation(op, left, right)
 	}
 
 	if leftType == object.ARRAY_OBJ && rightType == object.ARRAY_OBJ {
@@ -677,14 +681,56 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 	return vm.push(&object.Integer{Value: result})
 }
 
+func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object.Object) error {
+	var leftVal float64
+	var rightVal float64
+
+	if left.Type() == object.INTEGER_OBJ {
+		leftVal = float64(left.(*object.Integer).Value)
+	} else if left.Type() == object.FLOAT_OBJ {
+		leftVal = left.(*object.Float).Value
+	} else {
+		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", left.Type())})
+	}
+
+	if right.Type() == object.INTEGER_OBJ {
+		rightVal = float64(right.(*object.Integer).Value)
+	} else if right.Type() == object.FLOAT_OBJ {
+		rightVal = right.(*object.Float).Value
+	} else {
+		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", right.Type())})
+	}
+
+	var result float64
+	switch op {
+	case compiler.OpAdd:
+		result = leftVal + rightVal
+	case compiler.OpSub:
+		result = leftVal - rightVal
+	case compiler.OpMul:
+		result = leftVal * rightVal
+	case compiler.OpDiv:
+		result = leftVal / rightVal
+	default:
+		return fmt.Errorf("unknown float operator: %d", op)
+	}
+
+	return vm.push(&object.Float{Value: result})
+}
+
 func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right object.Object) error {
 	if op != compiler.OpAdd {
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown string operator: %d", op)})
 	}
 
-	leftVal := left.(*object.String).Value
-	var rightVal string
+	var leftVal string
+	if leftStr, ok := left.(*object.String); ok {
+		leftVal = leftStr.Value
+	} else {
+		leftVal = left.Inspect()
+	}
 
+	var rightVal string
 	if rightStr, ok := right.(*object.String); ok {
 		rightVal = rightStr.Value
 	} else {
@@ -706,6 +752,10 @@ func (vm *VM) executeComparison(op compiler.Opcode) error {
 
 	if left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ {
 		return vm.executeIntegerComparison(op, left, right)
+	}
+
+	if left.Type() == object.FLOAT_OBJ || right.Type() == object.FLOAT_OBJ {
+		return vm.executeFloatComparison(op, left, right)
 	}
 
 	if left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ {
@@ -737,6 +787,39 @@ func (vm *VM) executeIntegerComparison(op compiler.Opcode, left, right object.Ob
 		return vm.push(nativeBoolToBooleanObject(leftVal >= rightVal))
 	default:
 		return fmt.Errorf("unknown integer operator: %d", op)
+	}
+}
+
+func (vm *VM) executeFloatComparison(op compiler.Opcode, left, right object.Object) error {
+	var leftVal, rightVal float64
+
+	if i, ok := left.(*object.Integer); ok {
+		leftVal = float64(i.Value)
+	} else if f, ok := left.(*object.Float); ok {
+		leftVal = f.Value
+	} else {
+		return fmt.Errorf("cannot compare %s as float", left.Type())
+	}
+
+	if i, ok := right.(*object.Integer); ok {
+		rightVal = float64(i.Value)
+	} else if f, ok := right.(*object.Float); ok {
+		rightVal = f.Value
+	} else {
+		return fmt.Errorf("cannot compare %s as float", right.Type())
+	}
+
+	switch op {
+	case compiler.OpEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal == rightVal))
+	case compiler.OpNotEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal != rightVal))
+	case compiler.OpGreaterThan:
+		return vm.push(nativeBoolToBooleanObject(leftVal > rightVal))
+	case compiler.OpGreaterEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal >= rightVal))
+	default:
+		return fmt.Errorf("unknown float operator: %d", op)
 	}
 }
 
@@ -772,8 +855,13 @@ func (vm *VM) executeMinusOperator() error {
 		return err
 	}
 
-	if operand.Type() != object.INTEGER_OBJ {
+	if operand.Type() != object.INTEGER_OBJ && operand.Type() != object.FLOAT_OBJ {
 		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported type for negation: %s", operand.Type())})
+	}
+
+	if operand.Type() == object.FLOAT_OBJ {
+		value := operand.(*object.Float).Value
+		return vm.push(&object.Float{Value: -value})
 	}
 
 	value := operand.(*object.Integer).Value

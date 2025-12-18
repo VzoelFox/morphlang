@@ -246,8 +246,7 @@ func (l *Lexer) readCodeToken() Token {
 			tok.HasLeadingSpace = hasLeadingSpace
 			return tok
 		} else if isDigit(l.ch) {
-			tok.Literal = l.readNumber()
-			tok.Type = INT
+			tok.Literal, tok.Type = l.readNumber()
 			tok.Line = tokLine
 			tok.Column = tokCol
 			tok.HasLeadingSpace = hasLeadingSpace
@@ -310,12 +309,21 @@ func isLetter(ch byte) bool {
 	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
 }
 
-func (l *Lexer) readNumber() string {
+func (l *Lexer) readNumber() (string, TokenType) {
 	position := l.position
 	for isDigit(l.ch) {
 		l.readChar()
 	}
-	return l.input[position:l.position]
+
+	if l.ch == '.' && isDigit(l.peekChar()) {
+		l.readChar() // consume dot
+		for isDigit(l.ch) {
+			l.readChar()
+		}
+		return l.input[position:l.position], FLOAT
+	}
+
+	return l.input[position:l.position], INT
 }
 
 func isDigit(ch byte) bool {

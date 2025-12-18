@@ -2,6 +2,8 @@ package vm
 
 import (
 	"testing"
+
+	"github.com/VzoelFox/morphlang/pkg/object"
 )
 
 func TestBitwiseIntegerArithmetic(t *testing.T) {
@@ -52,30 +54,29 @@ func TestBitwiseIntegerArithmetic(t *testing.T) {
 	runVmTests(t, tests)
 }
 
-// TestBitwiseErrors temporarily disabled due to stack underflow investigation
-// func TestBitwiseErrors(t *testing.T) {
-// 	tests := []vmTestCase{
-// 		{
-// 			"benar & salah",
-// 			&object.Error{Message: "unsupported types for bitwise operation: BOOLEAN BOOLEAN"},
-// 		},
-// 		{
-// 			"1 | '2'",
-// 			&object.Error{Message: "unsupported types for bitwise operation: INTEGER STRING"},
-// 		},
-// 		{
-// 			"~benar",
-// 			&object.Error{Message: "unsupported type for bitwise not: BOOLEAN"},
-// 		},
-// 		{
-// 			"1 << -1",
-// 			&object.Error{Message: "negative shift count"},
-// 		},
-// 		{
-// 			"1 >> -1",
-// 			&object.Error{Message: "negative shift count"},
-// 		},
-// 	}
+func TestBitwiseErrors(t *testing.T) {
+	tests := []vmTestCase{
+		{
+			"benar & salah",
+			&object.Error{Message: "unsupported types for bitwise operation: BOOLEAN BOOLEAN"},
+		},
+		{
+			"1 | \"2\"",
+			&object.Error{Message: "unsupported types for bitwise operation: INTEGER STRING"},
+		},
+		{
+			"~benar",
+			&object.Error{Message: "unsupported type for bitwise not: BOOLEAN"},
+		},
+		{
+			"1 << -1",
+			&object.Error{Message: "negative shift count"},
+		},
+		{
+			"1 >> -1",
+			&object.Error{Message: "negative shift count"},
+		},
+	}
 
-// 	runVmTests(t, tests)
-// }
+	runVmTests(t, tests)
+}
