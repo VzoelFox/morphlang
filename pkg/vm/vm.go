@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/VzoelFox/morphlang/pkg/compiler"
+	"github.com/VzoelFox/morphlang/pkg/memory"
 	"github.com/VzoelFox/morphlang/pkg/object"
 )
 
@@ -38,6 +39,10 @@ type VM struct {
 	LastPoppedStackElem object.Object
 
 	snapshots []VMSnapshot
+
+	// Phase X: Memory Integration
+	Cabinet *memory.Cabinet
+	Drawer  *memory.Drawer
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -48,6 +53,16 @@ func New(bytecode *compiler.Bytecode) *VM {
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
 
+	// Phase X: Init Global Cabinet if needed
+	// Note: This is a simplified "Single Tenant" simulation.
+	// In real OS, Cabinet is pre-initialized.
+	// We check if Drawers exist to know if init is needed.
+	if len(memory.Lemari.Drawers) == 0 {
+		memory.InitCabinet()
+	}
+	// Acquire Drawer 0 for Main Thread (Simulation)
+	drawer := &memory.Lemari.Drawers[0]
+
 	return &VM{
 		constants:   bytecode.Constants,
 		globals:     make([]object.Object, GlobalSize),
@@ -56,6 +71,8 @@ func New(bytecode *compiler.Bytecode) *VM {
 		frames:      frames,
 		framesIndex: 1,
 		snapshots:   make([]VMSnapshot, 0),
+		Cabinet:     &memory.Lemari,
+		Drawer:      drawer,
 	}
 }
 
@@ -85,7 +102,37 @@ func (vm *VM) StackTop() object.Object {
 	return vm.stack[vm.sp-1]
 }
 
-func (vm *VM) Run() error {
+func (vm *VM) DumpState() {
+	fmt.Printf("\n=== VM MONITOR CRASH DUMP ===\n")
+	if vm.framesIndex > 0 {
+		frame := vm.currentFrame()
+		fmt.Printf("IP: %d\n", frame.ip)
+		fmt.Printf("Function Locals: %d\n", frame.cl.Fn.NumLocals)
+	}
+	fmt.Printf("Stack Pointer: %d\n", vm.sp)
+	if vm.sp > 0 {
+		top := vm.StackTop()
+		if top != nil {
+			fmt.Printf("Stack Top: %s (Type: %s)\n", top.Inspect(), top.Type())
+		} else {
+			fmt.Printf("Stack Top: nil\n")
+		}
+	}
+	if vm.Drawer != nil {
+		fmt.Printf("Drawer ID: %d (Physical Slot: %d)\n", vm.Drawer.ID, vm.Drawer.PhysicalSlot)
+	}
+	fmt.Printf("=============================\n")
+}
+
+func (vm *VM) Run() (err error) {
+	// VM Monitor: Panic Recovery
+	defer func() {
+		if r := recover(); r != nil {
+			vm.DumpState()
+			err = fmt.Errorf("VM CRASH (Monitor Recovered): %v", r)
+		}
+	}()
+
 	var ip int
 	var ins compiler.Instructions
 	var op compiler.Opcode
@@ -626,8 +673,12 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		return vm.executeBinaryIntegerOperation(op, left, right)
 	}
 
-	if leftType == object.STRING_OBJ {
+	if leftType == object.STRING_OBJ || rightType == object.STRING_OBJ {
 		return vm.executeBinaryStringOperation(op, left, right)
+	}
+
+	if leftType == object.FLOAT_OBJ || rightType == object.FLOAT_OBJ {
+		return vm.executeBinaryFloatOperation(op, left, right)
 	}
 
 	if leftType == object.ARRAY_OBJ && rightType == object.ARRAY_OBJ {
@@ -674,7 +725,52 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown integer operator: %d", op)})
 	}
 
+	// Phase X: Allocate in Custom Memory
+	// Hybrid: We create the Go Object, but we ALSO write to the Drawer to prove integration.
+	// In the future, we will return a Pointer wrapper.
+	_, allocErr := memory.AllocInteger(result)
+	if allocErr != nil {
+		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
+	}
+
 	return vm.push(&object.Integer{Value: result})
+}
+
+func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object.Object) error {
+	var leftVal float64
+	var rightVal float64
+
+	if left.Type() == object.INTEGER_OBJ {
+		leftVal = float64(left.(*object.Integer).Value)
+	} else if left.Type() == object.FLOAT_OBJ {
+		leftVal = left.(*object.Float).Value
+	} else {
+		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", left.Type())})
+	}
+
+	if right.Type() == object.INTEGER_OBJ {
+		rightVal = float64(right.(*object.Integer).Value)
+	} else if right.Type() == object.FLOAT_OBJ {
+		rightVal = right.(*object.Float).Value
+	} else {
+		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", right.Type())})
+	}
+
+	var result float64
+	switch op {
+	case compiler.OpAdd:
+		result = leftVal + rightVal
+	case compiler.OpSub:
+		result = leftVal - rightVal
+	case compiler.OpMul:
+		result = leftVal * rightVal
+	case compiler.OpDiv:
+		result = leftVal / rightVal
+	default:
+		return fmt.Errorf("unknown float operator: %d", op)
+	}
+
+	return vm.push(&object.Float{Value: result})
 }
 
 func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right object.Object) error {
@@ -682,9 +778,14 @@ func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right objec
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown string operator: %d", op)})
 	}
 
-	leftVal := left.(*object.String).Value
-	var rightVal string
+	var leftVal string
+	if leftStr, ok := left.(*object.String); ok {
+		leftVal = leftStr.Value
+	} else {
+		leftVal = left.Inspect()
+	}
 
+	var rightVal string
 	if rightStr, ok := right.(*object.String); ok {
 		rightVal = rightStr.Value
 	} else {
@@ -706,6 +807,10 @@ func (vm *VM) executeComparison(op compiler.Opcode) error {
 
 	if left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ {
 		return vm.executeIntegerComparison(op, left, right)
+	}
+
+	if left.Type() == object.FLOAT_OBJ || right.Type() == object.FLOAT_OBJ {
+		return vm.executeFloatComparison(op, left, right)
 	}
 
 	if left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ {
@@ -737,6 +842,39 @@ func (vm *VM) executeIntegerComparison(op compiler.Opcode, left, right object.Ob
 		return vm.push(nativeBoolToBooleanObject(leftVal >= rightVal))
 	default:
 		return fmt.Errorf("unknown integer operator: %d", op)
+	}
+}
+
+func (vm *VM) executeFloatComparison(op compiler.Opcode, left, right object.Object) error {
+	var leftVal, rightVal float64
+
+	if i, ok := left.(*object.Integer); ok {
+		leftVal = float64(i.Value)
+	} else if f, ok := left.(*object.Float); ok {
+		leftVal = f.Value
+	} else {
+		return fmt.Errorf("cannot compare %s as float", left.Type())
+	}
+
+	if i, ok := right.(*object.Integer); ok {
+		rightVal = float64(i.Value)
+	} else if f, ok := right.(*object.Float); ok {
+		rightVal = f.Value
+	} else {
+		return fmt.Errorf("cannot compare %s as float", right.Type())
+	}
+
+	switch op {
+	case compiler.OpEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal == rightVal))
+	case compiler.OpNotEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal != rightVal))
+	case compiler.OpGreaterThan:
+		return vm.push(nativeBoolToBooleanObject(leftVal > rightVal))
+	case compiler.OpGreaterEqual:
+		return vm.push(nativeBoolToBooleanObject(leftVal >= rightVal))
+	default:
+		return fmt.Errorf("unknown float operator: %d", op)
 	}
 }
 
@@ -772,8 +910,13 @@ func (vm *VM) executeMinusOperator() error {
 		return err
 	}
 
-	if operand.Type() != object.INTEGER_OBJ {
+	if operand.Type() != object.INTEGER_OBJ && operand.Type() != object.FLOAT_OBJ {
 		return vm.push(&object.Error{Message: fmt.Sprintf("unsupported type for negation: %s", operand.Type())})
+	}
+
+	if operand.Type() == object.FLOAT_OBJ {
+		value := operand.(*object.Float).Value
+		return vm.push(&object.Float{Value: -value})
 	}
 
 	value := operand.(*object.Integer).Value

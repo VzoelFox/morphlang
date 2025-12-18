@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ type ObjectType string
 
 const (
 	INTEGER_OBJ           = "INTEGER"
+	FLOAT_OBJ             = "FLOAT"
 	BOOLEAN_OBJ           = "BOOLEAN"
 	NULL_OBJ              = "NULL"
 	RETURN_VALUE_OBJ      = "RETURN_VALUE"
@@ -31,6 +33,8 @@ const (
 	TIME_OBJ              = "TIME"
 	MUTEX_OBJ             = "MUTEX"
 	ATOM_OBJ              = "ATOM"
+	FILE_OBJ              = "FILE"
+	POINTER_OBJ           = "POINTER"
 )
 
 type Object interface {
@@ -50,6 +54,16 @@ func (i *Integer) Type() ObjectType { return INTEGER_OBJ }
 func (i *Integer) Inspect() string  { return fmt.Sprintf("%d", i.Value) }
 func (i *Integer) HashKey() HashKey {
 	return HashKey{Type: i.Type(), Value: uint64(i.Value)}
+}
+
+type Float struct {
+	Value float64
+}
+
+func (f *Float) Type() ObjectType { return FLOAT_OBJ }
+func (f *Float) Inspect() string {
+	// Use %g for clean output (removes trailing zeros)
+	return fmt.Sprintf("%g", f.Value)
 }
 
 type Boolean struct {
@@ -159,6 +173,25 @@ func (a *Atom) Inspect() string {
 		return fmt.Sprintf("atom[%s]", a.Value.Inspect())
 	}
 	return "atom[kosong]"
+}
+
+type File struct {
+	File *os.File
+	Mode string
+}
+
+func (f *File) Type() ObjectType { return FILE_OBJ }
+func (f *File) Inspect() string {
+	return fmt.Sprintf("file[%s]", f.File.Name())
+}
+
+type Pointer struct {
+	Address uint64
+}
+
+func (p *Pointer) Type() ObjectType { return POINTER_OBJ }
+func (p *Pointer) Inspect() string {
+	return fmt.Sprintf("ptr[0x%x]", p.Address)
 }
 
 type BuiltinFunction func(args ...Object) Object
