@@ -14,6 +14,8 @@ const (
 	TagFloat   TypeTag = 4
 	TagNull    TypeTag = 5
 	TagArray   TypeTag = 6
+	TagCompiledFunction TypeTag = 7
+	TagClosure TypeTag = 8
 	// ... add others later
 )
 
