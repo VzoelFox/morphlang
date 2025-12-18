@@ -46,6 +46,9 @@ type Drawer struct {
 	SecondaryTray Tray
 	IsPrimaryActive bool // Which tray is currently receiving allocations?
 
+	// GC Metadata
+	AccessCount int64 // LFU Tracking
+
 	// Lease System
 	Lease *DrawerLease
 }
