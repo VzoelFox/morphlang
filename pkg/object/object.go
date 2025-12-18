@@ -266,14 +266,28 @@ func (f *Function) Inspect() string {
 }
 
 type CompiledFunction struct {
-	Instructions  []byte
-	NumLocals     int
-	NumParameters int
+	Address memory.Ptr
 }
 
 func (cf *CompiledFunction) Type() ObjectType { return COMPILED_FUNCTION_OBJ }
 func (cf *CompiledFunction) Inspect() string {
-	return fmt.Sprintf("CompiledFunction[%d]", len(cf.Instructions))
+	return fmt.Sprintf("CompiledFunction[Ptr:0x%x]", cf.Address)
+}
+
+func (cf *CompiledFunction) NumLocals() int {
+	n, _, err := memory.ReadCompiledFunctionMeta(cf.Address)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+func (cf *CompiledFunction) NumParameters() int {
+	_, n, err := memory.ReadCompiledFunctionMeta(cf.Address)
+	if err != nil {
+		panic(err)
+	}
+	return n
 }
 
 type Closure struct {

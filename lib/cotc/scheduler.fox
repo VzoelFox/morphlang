@@ -25,17 +25,17 @@ akhir
 
 fungsi pekerja_internal(sched, tugas_fn)
   selama benar
-    kunci(sched.mutex)
+    gembok(sched.mutex)
     idx = sched.index
     cetak("Worker processing shard #{idx}")
     jika idx >= panjang(sched.shards)
-      buka(sched.mutex)
+      buka_gembok(sched.mutex)
       kembalikan 0
     akhir
 
     sched.index = idx + 1
     shard_info = sched.shards[idx]
-    buka(sched.mutex)
+    buka_gembok(sched.mutex)
 
     start = shard_info.start
     end = shard_info.end
