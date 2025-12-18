@@ -34,18 +34,18 @@ akhir
 
 fungsi unit_kerja(sched, tugas_fn, unit_id)
   selama benar
-    kunci(sched.mutex)
+    gembok(sched.mutex)
     idx = sched.index
 
     jika idx >= panjang(sched.shards)
-      buka(sched.mutex)
+      buka_gembok(sched.mutex)
       kembalikan 0
     akhir
 
     sched.index = idx + 1
     shard = sched.shards[idx]
     shard["status"] = "processing"
-    buka(sched.mutex)
+    buka_gembok(sched.mutex)
 
     start = shard.start
     end = shard.end
