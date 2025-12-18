@@ -135,6 +135,8 @@ func (a *Analyzer) analyzeTopLevel(stmt parser.Statement) {
 			switch s.Value.(type) {
 			case *parser.IntegerLiteral:
 				inferredType = "integer"
+			case *parser.FloatLiteral:
+				inferredType = "float"
 			case *parser.StringLiteral:
 				inferredType = "string"
 			case *parser.BooleanLiteral:
