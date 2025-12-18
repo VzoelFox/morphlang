@@ -347,22 +347,29 @@ morph/
 
 **Concept:** Transforming Morph from a simple VM into a deterministic execution engine with memory ownership, snapshot/rollback, and FIFO scheduling.
 
-**Patch X.1: Drawer Lease System (Foundation)**
-- [ ] Implement `DrawerLease` struct (`pkg/memory/lease.go`).
-- [ ] Implement `AcquireDrawer(unitID)` - Exclusive ownership.
-- [ ] Implement `CommitDrawer(lease)` - Finalize changes.
-- [ ] Implement `RollbackDrawer(lease)` - Revert to snapshot.
-- [ ] Integrate with `Cabinet` structure.
+**Migration Strategy (Krusial):**
+1. **Tahap 1 (Hybrid):** VM tetap menggunakan interface Object Go, tapi di dalamnya, data primitif (int, float) mulai dialokasikan ke Custom Allocator (pkg/memory).
+2. **Tahap 2 (Complex Types):** String dan Array mulai dipindah ke Custom Allocator.
+3. **Tahap 3 (Full Swap):** Melepas ketergantungan pada Go GC sepenuhnya.
 
-**Patch X.2: VM Snapshot Opcodes (Error Recovery)**
+**Patch X.1: Hybrid Integration (Tahap 1)**
+- [x] Fix Memory Leak: Link `object.Integer` to `memory.Ptr`.
+- [x] Implement `AllocFloat` in `pkg/memory`.
+- [x] Implement `DrawerLease` struct (`pkg/memory/lease.go`).
+- [x] Implement `AcquireDrawer(unitID)` - Exclusive ownership.
+- [x] Integrate with `Cabinet` structure.
+
+**Patch X.2: Complex Types & Snapshot (Tahap 2)**
+- [x] Migrate String to Custom Allocator.
+- [x] Migrate Array to Custom Allocator.
 - [ ] Implement `OP_SNAPSHOT`, `OP_ROLLBACK`, `OP_COMMIT`.
-- [ ] Update VM to support State Checkpointing (Stack + IP + Locals).
-- [ ] Integrate VM with Memory Drawer Lease.
+- [ ] Update VM to support State Checkpointing.
 
-**Patch X.3: Scheduler & FIFO (Orchestration)**
-- [ ] Implement FIFO Queue mechanism.
-- [ ] Implement Atomic Shard Assignment (CAS).
-- [ ] Implement Worker Units logic (Morph Routine).
+**Patch X.3: Full Swap & Scheduler (Tahap 3)**
+- [x] Remove Go GC dependency (VM Logic Swapped to Memory Read).
+- [x] Implement FIFO Queue mechanism.
+- [x] Implement Atomic Shard Assignment (CAS).
+- [ ] Implement Worker Units logic (Morph Routine) - Skeleton in `pkg/scheduler/worker.go`.
 
 ---
 
