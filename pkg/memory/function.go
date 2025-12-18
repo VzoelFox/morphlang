@@ -79,6 +79,23 @@ func ReadCompiledFunction(ptr Ptr) ([]byte, int, int, error) {
 	return instr, numLocals, numParams, nil
 }
 
+// ReadCompiledFunctionMeta reads only metadata (Locals, Params).
+func ReadCompiledFunctionMeta(ptr Ptr) (int, int, error) {
+	Lemari.mu.Lock()
+	defer Lemari.mu.Unlock()
+
+	raw, err := Lemari.resolve(ptr)
+	if err != nil { return 0, 0, err }
+
+	bodyPtr := unsafe.Pointer(uintptr(raw) + uintptr(HeaderSize))
+	numLocals := int(*(*int32)(bodyPtr))
+
+	paramPtr := unsafe.Pointer(uintptr(bodyPtr) + 4)
+	numParams := int(*(*int32)(paramPtr))
+
+	return numLocals, numParams, nil
+}
+
 // Layout: [Header][FnPtr(8)][FreeCount(4)][FreePtr0(8)]...
 func AllocClosure(fnPtr Ptr, freeVars []Ptr) (Ptr, error) {
 	freeCount := len(freeVars)

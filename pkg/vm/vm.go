@@ -60,7 +60,11 @@ type VM struct {
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
-	mainFn := &object.CompiledFunction{Instructions: bytecode.Instructions}
+	ptr, err := memory.AllocCompiledFunction(bytecode.Instructions, 0, 0)
+	if err != nil {
+		panic(fmt.Sprintf("vm boot error: %v", err))
+	}
+	mainFn := &object.CompiledFunction{Address: ptr}
 	mainClosure := &object.Closure{Fn: mainFn}
 	mainFrame := NewFrame(mainClosure, 0)
 
@@ -140,7 +144,7 @@ func (vm *VM) DumpState() {
 	if vm.framesIndex > 0 {
 		frame := vm.currentFrame()
 		fmt.Printf("IP: %d\n", frame.ip)
-		fmt.Printf("Function Locals: %d\n", frame.cl.Fn.NumLocals)
+		fmt.Printf("Function Locals: %d\n", frame.cl.Fn.NumLocals())
 	}
 	fmt.Printf("Stack Pointer: %d\n", vm.sp)
 	if vm.sp > 0 {
@@ -479,9 +483,9 @@ func (vm *VM) executeCall(numArgs int) error {
 	callee := vm.stack[vm.sp-1-numArgs]
 	switch callee := callee.(type) {
 	case *object.Closure:
-		if numArgs != callee.Fn.NumParameters {
+		if numArgs != callee.Fn.NumParameters() {
 			return fmt.Errorf("wrong number of arguments: want=%d, got=%d",
-				callee.Fn.NumParameters, numArgs)
+				callee.Fn.NumParameters(), numArgs)
 		}
 
 		frame := NewFrame(callee, vm.sp-numArgs)
@@ -489,7 +493,7 @@ func (vm *VM) executeCall(numArgs int) error {
 		if err != nil {
 			return err
 		}
-		vm.sp = frame.basePointer + callee.Fn.NumLocals
+		vm.sp = frame.basePointer + callee.Fn.NumLocals()
 		return nil
 
 	case *object.Builtin:
@@ -567,7 +571,7 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 	if !ok {
 		return nil, fmt.Errorf("luncurkan argument must be a function")
 	}
-	if cl.Fn.NumParameters != 0 {
+	if cl.Fn.NumParameters() != 0 {
 		return nil, fmt.Errorf("luncurkan function must accept 0 arguments")
 	}
 
@@ -625,7 +629,7 @@ func executeTask(ptr memory.Ptr) {
 		constants:   ctx.Constants,
 		globals:     ctx.Globals,
 		stack:       [StackSize]object.Object{},
-		sp:          ctx.Closure.Fn.NumLocals,
+		sp:          ctx.Closure.Fn.NumLocals(),
 		frames:      frames,
 		framesIndex: 1,
 		snapshots:   make([]VMSnapshot, 0),

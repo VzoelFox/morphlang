@@ -1,6 +1,9 @@
 package memory
 
-import "unsafe"
+import (
+	"sync/atomic"
+	"unsafe"
+)
 
 // CompareAndSwapPtr performs an atomic compare-and-swap operation on a Ptr value in memory.
 // It checks if the value at 'addr' is equal to 'old'. If so, it sets it to 'new' and returns true.
@@ -11,12 +14,10 @@ func CompareAndSwapPtr(addr Ptr, old, new Ptr) (bool, error) {
 	raw, err := Lemari.resolveFast(addr)
 	if err == nil {
 		defer Lemari.mu.RUnlock()
-		target := (*Ptr)(unsafe.Pointer(raw))
-		if *target == old {
-			*target = new
-			return true, nil
-		}
-		return false, nil
+		// Use Hardware CAS. Safe because RLock prevents eviction.
+		target := (*uint64)(unsafe.Pointer(raw))
+		swapped := atomic.CompareAndSwapUint64(target, uint64(old), uint64(new))
+		return swapped, nil
 	}
 	Lemari.mu.RUnlock()
 
@@ -30,12 +31,14 @@ func CompareAndSwapPtr(addr Ptr, old, new Ptr) (bool, error) {
 			return false, err
 		}
 
-		target := (*Ptr)(unsafe.Pointer(raw))
-		if *target == old {
-			*target = new
-			return true, nil
-		}
-		return false, nil
+		target := (*uint64)(unsafe.Pointer(raw))
+		// We hold exclusive Lock, so simple check-set is atomic regarding other operations
+		// BUT mixed access (one holding Lock, one holding RLock+Atomic) is tricky?
+		// No, Lock excludes RLock. So no one else can be accessing via Optimistic Path.
+		// So simple logic is fine.
+		// But let's use atomic for consistency.
+		swapped := atomic.CompareAndSwapUint64(target, uint64(old), uint64(new))
+		return swapped, nil
 	}
 
 	return false, err
@@ -48,8 +51,9 @@ func LoadPtr(addr Ptr) (Ptr, error) {
 	raw, err := Lemari.resolveFast(addr)
 	if err == nil {
 		defer Lemari.mu.RUnlock()
-		target := (*Ptr)(unsafe.Pointer(raw))
-		return *target, nil
+		target := (*uint64)(unsafe.Pointer(raw))
+		val := atomic.LoadUint64(target)
+		return Ptr(val), nil
 	}
 	Lemari.mu.RUnlock()
 
@@ -62,8 +66,10 @@ func LoadPtr(addr Ptr) (Ptr, error) {
 		if err != nil {
 			return NilPtr, err
 		}
-		target := (*Ptr)(unsafe.Pointer(raw))
-		return *target, nil
+		target := (*uint64)(unsafe.Pointer(raw))
+		// Even under Lock, reading should be atomic to avoid tearing if architecture requires it
+		val := atomic.LoadUint64(target)
+		return Ptr(val), nil
 	}
 
 	return NilPtr, err
@@ -76,8 +82,8 @@ func StorePtr(addr Ptr, val Ptr) error {
 	raw, err := Lemari.resolveFast(addr)
 	if err == nil {
 		defer Lemari.mu.RUnlock()
-		target := (*Ptr)(unsafe.Pointer(raw))
-		*target = val
+		target := (*uint64)(unsafe.Pointer(raw))
+		atomic.StoreUint64(target, uint64(val))
 		return nil
 	}
 	Lemari.mu.RUnlock()
@@ -91,8 +97,8 @@ func StorePtr(addr Ptr, val Ptr) error {
 		if err != nil {
 			return err
 		}
-		target := (*Ptr)(unsafe.Pointer(raw))
-		*target = val
+		target := (*uint64)(unsafe.Pointer(raw))
+		atomic.StoreUint64(target, uint64(val))
 		return nil
 	}
 

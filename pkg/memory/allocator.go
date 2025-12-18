@@ -15,6 +15,22 @@ func (c *Cabinet) Alloc(size int) (Ptr, error) {
 
 // Internal recursive alloc (assumes lock held)
 func (c *Cabinet) alloc(size int) (Ptr, error) {
+	// Auto-initialize if needed (Lazy Init)
+	// Safe because Lock is held by caller.
+	if len(c.Drawers) == 0 {
+		RAM.Reset()
+		InitSwap()
+		c.Drawers = make([]Drawer, 0, MAX_VIRTUAL_DRAWERS)
+		c.Snapshots = make(map[int64][]byte)
+		c.NextSnapshotID = 1
+		for i := 0; i < PHYSICAL_SLOTS; i++ {
+			c.RAMSlots[i] = -1
+		}
+		for i := 0; i < PHYSICAL_SLOTS; i++ {
+			CreateDrawer()
+		}
+		c.ActiveDrawerIndex = 0
+	}
 	if size <= 0 {
 		return NilPtr, fmt.Errorf("invalid allocation size: %d", size)
 	}
