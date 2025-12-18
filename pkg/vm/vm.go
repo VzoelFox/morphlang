@@ -448,6 +448,7 @@ func executeTask(ptr memory.Ptr) {
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = NewFrame(ctx.Closure, 0)
 
+	// Fix: Use method for NumLocals
 	newVM := &VM{
 		constants: ctx.Constants,
 		globals: ctx.Globals,

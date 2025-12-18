@@ -222,6 +222,7 @@ func (e *Error) Inspect() string {
 	out.WriteString(fmt.Sprintf("  %s\n", msg))
 	return out.String()
 }
+func (e *Error) GetAddress() memory.Ptr { return memory.NilPtr }
 
 type Channel struct {
 	Value chan Object
