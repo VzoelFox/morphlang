@@ -726,6 +726,9 @@ func (vm *VM) executeBinaryArrayOperation(op compiler.Opcode, left, right object
 
 	// Copy pointers
 	for i, obj := range newElements {
+		if err := vm.ensureOnHeap(obj); err != nil {
+			return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed for element: %s", err)})
+		}
 		elemPtr := getObjectAddress(obj)
 		if elemPtr != 0 {
 			memory.WriteArrayElement(ptr, i, elemPtr)
@@ -735,9 +738,65 @@ func (vm *VM) executeBinaryArrayOperation(op compiler.Opcode, left, right object
 	return vm.push(&object.Array{Elements: newElements, Address: ptr})
 }
 
+func (vm *VM) ensureOnHeap(obj object.Object) error {
+	switch o := obj.(type) {
+	case *object.Integer:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocInteger(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	case *object.Float:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocFloat(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	case *object.String:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocString(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	case *object.Boolean:
+		if o.Address != 0 {
+			return nil
+		}
+		ptr, err := memory.AllocBoolean(o.Value)
+		if err != nil {
+			return err
+		}
+		o.Address = ptr
+	}
+	return nil
+}
+
 func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right object.Object) error {
-	leftVal := left.(*object.Integer).Value
-	rightVal := right.(*object.Integer).Value
+	if err := vm.ensureOnHeap(left); err != nil {
+		return err
+	}
+	if err := vm.ensureOnHeap(right); err != nil {
+		return err
+	}
+
+	// Phase 3: Full Swap - Read from Memory
+	leftVal, err := memory.ReadInteger(left.(*object.Integer).Address)
+	if err != nil {
+		return err
+	}
+	rightVal, err := memory.ReadInteger(right.(*object.Integer).Address)
+	if err != nil {
+		return err
+	}
 
 	var result int64
 
@@ -757,9 +816,6 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown integer operator: %d", op)})
 	}
 
-	// Phase X: Allocate in Custom Memory
-	// Hybrid: We create the Go Object, but we ALSO write to the Drawer to prove integration.
-	// In the future, we will return a Pointer wrapper.
 	ptr, allocErr := memory.AllocInteger(result)
 	if allocErr != nil {
 		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
@@ -769,21 +825,44 @@ func (vm *VM) executeBinaryIntegerOperation(op compiler.Opcode, left, right obje
 }
 
 func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object.Object) error {
+	if err := vm.ensureOnHeap(left); err != nil {
+		return err
+	}
+	if err := vm.ensureOnHeap(right); err != nil {
+		return err
+	}
+
 	var leftVal float64
 	var rightVal float64
+	var err error
 
 	if left.Type() == object.INTEGER_OBJ {
-		leftVal = float64(left.(*object.Integer).Value)
+		// Auto-promote read
+		intVal, err := memory.ReadInteger(left.(*object.Integer).Address)
+		if err != nil {
+			return err
+		}
+		leftVal = float64(intVal)
 	} else if left.Type() == object.FLOAT_OBJ {
-		leftVal = left.(*object.Float).Value
+		leftVal, err = memory.ReadFloat(left.(*object.Float).Address)
+		if err != nil {
+			return err
+		}
 	} else {
 		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", left.Type())})
 	}
 
 	if right.Type() == object.INTEGER_OBJ {
-		rightVal = float64(right.(*object.Integer).Value)
+		intVal, err := memory.ReadInteger(right.(*object.Integer).Address)
+		if err != nil {
+			return err
+		}
+		rightVal = float64(intVal)
 	} else if right.Type() == object.FLOAT_OBJ {
-		rightVal = right.(*object.Float).Value
+		rightVal, err = memory.ReadFloat(right.(*object.Float).Address)
+		if err != nil {
+			return err
+		}
 	} else {
 		return vm.push(&object.Error{Message: fmt.Sprintf("type mismatch in float operation: %s", right.Type())})
 	}
@@ -802,7 +881,6 @@ func (vm *VM) executeBinaryFloatOperation(op compiler.Opcode, left, right object
 		return fmt.Errorf("unknown float operator: %d", op)
 	}
 
-	// Phase X: Custom Memory Allocation (Hybrid)
 	ptr, allocErr := memory.AllocFloat(result)
 	if allocErr != nil {
 		return vm.push(&object.Error{Message: fmt.Sprintf("memory allocation failed: %s", allocErr)})
@@ -816,16 +894,30 @@ func (vm *VM) executeBinaryStringOperation(op compiler.Opcode, left, right objec
 		return vm.push(&object.Error{Message: fmt.Sprintf("unknown string operator: %d", op)})
 	}
 
+	if err := vm.ensureOnHeap(left); err != nil {
+		return err
+	}
+	if err := vm.ensureOnHeap(right); err != nil {
+		return err
+	}
+
 	var leftVal string
+	var err error
 	if leftStr, ok := left.(*object.String); ok {
-		leftVal = leftStr.Value
+		leftVal, err = memory.ReadString(leftStr.Address)
+		if err != nil {
+			return err
+		}
 	} else {
-		leftVal = left.Inspect()
+		leftVal = left.Inspect() // Fallback for non-strings (e.g. integer to string)
 	}
 
 	var rightVal string
 	if rightStr, ok := right.(*object.String); ok {
-		rightVal = rightStr.Value
+		rightVal, err = memory.ReadString(rightStr.Address)
+		if err != nil {
+			return err
+		}
 	} else {
 		rightVal = right.Inspect()
 	}
@@ -1064,6 +1156,10 @@ func (vm *VM) buildArray(startIndex, endIndex int) (object.Object, error) {
 	for i := 0; i < length; i++ {
 		obj := vm.stack[startIndex+i]
 		elements[i] = obj
+
+		if err := vm.ensureOnHeap(obj); err != nil {
+			return nil, err
+		}
 
 		elemPtr := getObjectAddress(obj)
 		if elemPtr != 0 {
