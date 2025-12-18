@@ -26,6 +26,7 @@ var (
 	schedulerOnce sync.Once
 	taskRegistry  sync.Map
 	taskIDGen     int64
+	activeVMs     sync.Map
 )
 
 type TaskContext struct {
@@ -94,6 +95,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 		if FalsePtr == 0 {
 			FalsePtr = False.Address
 		}
+		memory.Lemari.RootProvider = GlobalRootProvider
 	})
 
 	schedulerOnce.Do(func() {
@@ -102,7 +104,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 	drawer := &memory.Lemari.Drawers[0]
 
-	return &VM{
+	vm := &VM{
 		constants:   bytecode.Constants,
 		globals:     make([]memory.Ptr, GlobalSize),
 		stack:       [StackSize]memory.Ptr{},
@@ -113,6 +115,8 @@ func New(bytecode *compiler.Bytecode) *VM {
 		Cabinet:     &memory.Lemari,
 		Drawer:      drawer,
 	}
+	activeVMs.Store(vm, true)
+	return vm
 }
 
 func (vm *VM) currentFrame() *Frame {
@@ -465,6 +469,8 @@ func executeTask(ptr memory.Ptr) {
 		framesIndex: 1,
 		Cabinet: &memory.Lemari,
 	}
+	activeVMs.Store(newVM, true)
+	defer activeVMs.Delete(newVM)
 
 	err := newVM.Run()
 	if err != nil {
@@ -496,4 +502,59 @@ func ensureOnHeap(obj object.Object) error {
 
 func getObjectAddress(obj object.Object) memory.Ptr {
 	return obj.GetAddress()
+}
+
+func GlobalRootProvider() []*memory.Ptr {
+	roots := []*memory.Ptr{}
+
+	// Global constants
+	if TruePtr != memory.NilPtr { roots = append(roots, &TruePtr) }
+	if FalsePtr != memory.NilPtr { roots = append(roots, &FalsePtr) }
+
+	activeVMs.Range(func(key, value interface{}) bool {
+		vm := key.(*VM)
+		roots = append(roots, vm.GetRoots()...)
+		return true
+	})
+
+	return roots
+}
+
+func (vm *VM) GetRoots() []*memory.Ptr {
+	roots := []*memory.Ptr{}
+
+	// 1. Stack (Live)
+	for i := 0; i < vm.sp; i++ {
+		roots = append(roots, &vm.stack[i])
+	}
+
+	// 2. Globals
+	for i := range vm.globals {
+		if vm.globals[i] != memory.NilPtr {
+			roots = append(roots, &vm.globals[i])
+		}
+	}
+
+	// 3. Constants
+	for _, obj := range vm.constants {
+		switch val := obj.(type) {
+		case *object.Integer: roots = append(roots, &val.Address)
+		case *object.Float: roots = append(roots, &val.Address)
+		case *object.Boolean: roots = append(roots, &val.Address)
+		case *object.String: roots = append(roots, &val.Address)
+		case *object.CompiledFunction: roots = append(roots, &val.Address)
+		case *object.Null: roots = append(roots, &val.Address)
+		// Add others if needed
+		}
+	}
+
+	// 4. Frames (Closures)
+	for i := 0; i < vm.framesIndex; i++ {
+		f := vm.frames[i]
+		if f != nil && f.cl != nil {
+			roots = append(roots, &f.cl.Address)
+		}
+	}
+
+	return roots
 }

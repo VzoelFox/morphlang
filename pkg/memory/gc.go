@@ -3,6 +3,7 @@ package memory
 import (
 	"fmt"
 	"time"
+	"unsafe"
 )
 
 var gcStop chan bool
@@ -21,7 +22,7 @@ func StartGC(interval time.Duration) {
 		for {
 			select {
 			case <-ticker.C:
-				Lemari.GC()
+				Lemari.LFUAging()
 			case <-gcStop:
 				return
 			}
@@ -29,10 +30,10 @@ func StartGC(interval time.Duration) {
 	}()
 }
 
-// GC performs a garbage collection cycle.
+// LFUAging performs background maintenance.
 // 1. Aging: Decays AccessCounts to ensure recent usage is prioritized.
 // 2. Preemptive Eviction: Frees up RAM slots if pressure is high.
-func (c *Cabinet) GC() {
+func (c *Cabinet) LFUAging() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -97,4 +98,129 @@ func (c *Cabinet) findVictimLFU() int {
 	}
 
 	return victimSlot
+}
+
+// MarkAndCompact performs a Stop-the-World, Copying Garbage Collection.
+// 1. Flips the Active Trays (Semi-Space).
+// 2. Evacuates Roots (Stack + Globals).
+// 3. Scans and Evacuates reachable objects (Cheney's Algorithm).
+// 4. Discards old Trays (Implicitly by reuse).
+func (c *Cabinet) MarkAndCompact(roots []*Ptr) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.IsGCRunning {
+		return fmt.Errorf("GC re-entry")
+	}
+	c.IsGCRunning = true
+	defer func() { c.IsGCRunning = false }()
+
+	// 1. Flip Trays
+	for i := range c.Drawers {
+		d := &c.Drawers[i]
+		d.IsPrimaryActive = !d.IsPrimaryActive
+
+		var activeTray *Tray
+		if d.IsPrimaryActive {
+			activeTray = &d.PrimaryTray
+		} else {
+			activeTray = &d.SecondaryTray
+		}
+		activeTray.Current = activeTray.Start
+	}
+
+	// Reset ActiveDrawerIndex to 0 to compact from the beginning
+	c.ActiveDrawerIndex = 0
+
+	// 2. Evacuate Roots
+	for _, root := range roots {
+		newPtr, err := c.evacuate(*root)
+		if err != nil { return err }
+		*root = newPtr
+	}
+
+	// 3. Scan (Cheney's Algorithm)
+	scanIdx := 0
+	scanTray := c.getTray(0)
+	scanPtr := scanTray.Start
+
+	for {
+		// Move to next drawer if current tray exhausted
+		if scanPtr >= scanTray.Current {
+			scanIdx++
+			if scanIdx > c.ActiveDrawerIndex {
+				break // Done
+			}
+			scanTray = c.getTray(scanIdx)
+			scanPtr = scanTray.Start
+			continue
+		}
+
+		// Read Object at scanPtr
+		raw, err := c.resolve(scanPtr)
+		if err != nil { return err }
+		header := (*Header)(raw)
+		size := header.Size
+
+		// Scan children
+		children, err := Scan(scanPtr)
+		if err != nil { return err }
+
+		for _, child := range children {
+			newPtr, err := c.evacuate(*child)
+			if err != nil { return err }
+			*child = newPtr
+		}
+
+		// Advance
+		scanPtr = scanPtr.Add(uint32(size))
+	}
+
+	return nil
+}
+
+func (c *Cabinet) getTray(drawerIdx int) *Tray {
+	d := &c.Drawers[drawerIdx]
+	if d.IsPrimaryActive {
+		return &d.PrimaryTray
+	}
+	return &d.SecondaryTray
+}
+
+// evacuate moves an object to the To-Space if not already moved.
+// Returns the new pointer.
+func (c *Cabinet) evacuate(oldPtr Ptr) (Ptr, error) {
+	if oldPtr == NilPtr { return NilPtr, nil }
+
+	// Resolve old object (From-Space)
+	raw, err := c.resolve(oldPtr)
+	if err != nil { return NilPtr, err }
+
+	header := (*Header)(raw)
+
+	// Check Forwarding
+	if header.Forwarding != NilPtr {
+		return header.Forwarding, nil
+	}
+
+	// Copy
+	size := int(header.Size)
+	newPtr, err := c.alloc(size) // Allocates in To-Space
+	if err != nil { return NilPtr, err }
+
+	newRaw, err := c.resolve(newPtr)
+	if err != nil { return NilPtr, err }
+
+	// Memcpy
+	src := unsafe.Slice((*byte)(raw), size)
+	dst := unsafe.Slice((*byte)(newRaw), size)
+	copy(dst, src)
+
+	// Update Forwarding in Old Object
+	// Re-resolve because alloc might have caused page fault/eviction
+	raw, _ = c.resolve(oldPtr)
+	header = (*Header)(raw)
+	header.Forwarding = newPtr
+
+	return newPtr, nil
 }

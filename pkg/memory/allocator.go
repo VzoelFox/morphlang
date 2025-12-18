@@ -60,9 +60,22 @@ func (c *Cabinet) alloc(size int) (Ptr, error) {
 	}
 
 	if activeTray.Remaining() < alignedSize {
-		// Drawer Full. Create new drawer.
-		newDrawer := CreateDrawer() // Internal? No, exported in structure.go. Assumes Lock?
-		// We need to verify CreateDrawer. Assuming it doesn't lock.
+		// Drawer Full. Check if next drawer exists (Reusable)
+		nextID := c.ActiveDrawerIndex + 1
+		if nextID < len(c.Drawers) {
+			c.ActiveDrawerIndex = nextID
+			// Ensure resident
+			if c.Drawers[nextID].PhysicalSlot == -1 {
+				if err := c.bringToRAM(nextID); err != nil {
+					return NilPtr, err
+				}
+			}
+			// Recurse
+			return c.alloc(size)
+		}
+
+		// Create new drawer.
+		newDrawer := CreateDrawer()
 		if newDrawer == nil {
 			return NilPtr, fmt.Errorf("virtual memory limit reached")
 		}
