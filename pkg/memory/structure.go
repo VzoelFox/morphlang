@@ -1,6 +1,9 @@
 package memory
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // Constants for sizing
 const (
@@ -46,13 +49,23 @@ type Drawer struct {
 	SecondaryTray Tray
 	IsPrimaryActive bool // Which tray is currently receiving allocations?
 
+	// GC Metadata
+	AccessCount int64 // LFU Tracking
+
 	// Lease System
 	Lease *DrawerLease
 }
 
 // Cabinet represents the entire Heap (Lemari).
 type Cabinet struct {
-	mu sync.Mutex
+	// TODO: PERFORMANCE BOTTLENECK
+	// Currently using a global Mutex for simplicity during Phase X.
+	// This serializes all memory access and will be a contention point for multi-threaded workloads.
+	// FUTURE OPTIMIZATION:
+	// 1. Upgrade to sync.RWMutex to allow concurrent reads (resolve).
+	// 2. Implement per-Drawer locking for finer granularity.
+	// 3. Separate "Fast Path" (Resident Read) from "Slow Path" (Swap In Write).
+	mu sync.RWMutex
 
 	// Virtual Drawers
 	Drawers []Drawer
@@ -91,6 +104,10 @@ func InitCabinet() {
 	}
 
 	Lemari.ActiveDrawerIndex = 0
+
+	// Start Background GC (Daemon)
+	// Runs every 1 second to apply aging and free up slots.
+	StartGC(1 * time.Second)
 }
 
 // CreateDrawer creates a new virtual drawer and tries to assign a physical slot
