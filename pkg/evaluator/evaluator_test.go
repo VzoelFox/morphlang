@@ -232,8 +232,8 @@ func testIntegerObject(t *testing.T, obj object.Object, expected int64) bool {
 		t.Errorf("object is not Integer. got=%T (%+v)", obj, obj)
 		return false
 	}
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%d, want=%d", result.Value, expected)
+	if result.GetValue() != expected {
+		t.Errorf("object has wrong value. got=%d, want=%d", result.GetValue(), expected)
 		return false
 	}
 	return true
@@ -245,15 +245,15 @@ func testBooleanObject(t *testing.T, obj object.Object, expected bool) bool {
 		t.Errorf("object is not Boolean. got=%T (%+v)", obj, obj)
 		return false
 	}
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%t, want=%t", result.Value, expected)
+	if result.GetValue() != expected {
+		t.Errorf("object has wrong value. got=%t, want=%t", result.GetValue(), expected)
 		return false
 	}
 	return true
 }
 
 func testNullObject(t *testing.T, obj object.Object) bool {
-	if obj != NULL {
+	if obj.Type() != object.NULL_OBJ {
 		t.Errorf("object is not NULL. got=%T (%+v)", obj, obj)
 		return false
 	}

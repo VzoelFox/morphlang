@@ -22,7 +22,7 @@ func TestStackUnderflow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock constants if needed
-			constants := []object.Object{&object.Integer{Value: 1}}
+			constants := []object.Object{object.NewInteger(1)}
 
 			bytecode := &compiler.Bytecode{
 				Instructions: tt.instructions,

@@ -16,9 +16,9 @@ const GlobalSize = 65536
 const MaxFrames = 1024
 
 var (
-	True          = &object.Boolean{Value: true}
-	False         = &object.Boolean{Value: false}
-	Null          = &object.Null{}
+	True          *object.Boolean
+	False         *object.Boolean
+	Null          *object.Null
 	TruePtr       memory.Ptr
 	FalsePtr      memory.Ptr
 	NullPtr       memory.Ptr = memory.NilPtr
@@ -62,12 +62,24 @@ type VM struct {
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
+	// Initialize Globals lazily if not set
+	if True == nil {
+		True = object.NewBoolean(true)
+		False = object.NewBoolean(false)
+		Null = object.NewNull()
+	}
+
 	ptr, err := memory.AllocCompiledFunction(bytecode.Instructions, 0, 0)
 	if err != nil {
 		panic(fmt.Sprintf("vm boot error: %v", err))
 	}
 	mainFn := &object.CompiledFunction{Address: ptr}
-	mainClosure := &object.Closure{Fn: mainFn}
+
+	// Create Main Closure
+	closurePtr, err := memory.AllocClosure(mainFn.Address, []memory.Ptr{})
+	if err != nil { panic(err) }
+	mainClosure := &object.Closure{Address: closurePtr}
+
 	mainFrame := NewFrame(mainClosure, 0)
 
 	frames := make([]*Frame, MaxFrames)
@@ -79,10 +91,10 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 	bootstrapOnce.Do(func() {
 		if TruePtr == 0 {
-			TruePtr, _ = memory.AllocBoolean(true)
+			TruePtr = True.Address
 		}
 		if FalsePtr == 0 {
-			FalsePtr, _ = memory.AllocBoolean(false)
+			FalsePtr = False.Address
 		}
 	})
 
@@ -137,7 +149,8 @@ func (vm *VM) DumpState() {
 	if vm.framesIndex > 0 {
 		frame := vm.currentFrame()
 		fmt.Printf("IP: %d\n", frame.ip)
-		fmt.Printf("Function Locals: %d\n", frame.cl.Fn.NumLocals())
+		// Fix: Use method
+		fmt.Printf("Function Locals: %d\n", frame.cl.Fn().NumLocals())
 	}
 	fmt.Printf("Stack Pointer: %d\n", vm.sp)
 	fmt.Printf("=============================\n")
@@ -240,7 +253,8 @@ func (vm *VM) Run() (err error) {
 			freeIndex := int(ins[ip+1])
 			vm.currentFrame().ip += 1
 			currentClosure := vm.currentFrame().cl
-			obj := currentClosure.FreeVariables[freeIndex]
+			// Fix: Access via method
+			obj := currentClosure.FreeVariables()[freeIndex]
 			if err := ensureOnHeap(obj); err != nil { return err }
 			if err := vm.push(getObjectAddress(obj)); err != nil { return err }
 
@@ -319,12 +333,10 @@ func (vm *VM) pushClosure(constIndex int, numFree int) error {
 	fn := constant.(*object.CompiledFunction)
 
 	freeVars := make([]memory.Ptr, numFree)
-	freeObjs := make([]object.Object, numFree)
+	// We don't need freeObjs list here, just Ptrs
 	for i := 0; i < numFree; i++ {
 		ptr := vm.stack[vm.sp-numFree+i]
 		freeVars[i] = ptr
-		obj, _ := Rehydrate(ptr)
-		freeObjs[i] = obj
 	}
 	vm.sp -= numFree
 
@@ -341,18 +353,9 @@ func (vm *VM) executeCall(numArgs int) error {
 	if err != nil { return err }
 
 	if header.Type == memory.TagClosure {
-		fnPtr, _, err := memory.ReadClosure(calleePtr)
-		if err != nil { return err }
-
-		fnWrapper := &object.CompiledFunction{Address: fnPtr}
-
-		_, freePtrs, _ := memory.ReadClosure(calleePtr)
-		freeObjs := make([]object.Object, len(freePtrs))
-		for i, p := range freePtrs {
-			freeObjs[i], _ = Rehydrate(p)
-		}
-
-		clWrapper := &object.Closure{Fn: fnWrapper, FreeVariables: freeObjs}
+		// Use wrapper to get details
+		clWrapper := &object.Closure{Address: calleePtr}
+		fnWrapper := clWrapper.Fn()
 
 		if numArgs != fnWrapper.NumParameters() {
 			return fmt.Errorf("arg mismatch")
@@ -372,8 +375,9 @@ func (vm *VM) executeCall(numArgs int) error {
 }
 
 func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
-	idx, _ := memory.ReadBuiltin(builtinPtr)
-	builtin := object.Builtins[idx].Builtin
+	// Rehydrate to get Builtin Wrapper with Fn
+	builtinObj, _ := Rehydrate(builtinPtr)
+	builtin := builtinObj.(*object.Builtin)
 
 	args := make([]object.Object, numArgs)
 	for i := 0; i < numArgs; i++ {
@@ -432,11 +436,12 @@ func executeTask(ptr memory.Ptr) {
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = NewFrame(ctx.Closure, 0)
 
+	// Fix: Use method for NumLocals
 	newVM := &VM{
 		constants: ctx.Constants,
 		globals: ctx.Globals,
 		stack: [StackSize]memory.Ptr{},
-		sp: ctx.Closure.Fn.NumLocals(),
+		sp: ctx.Closure.Fn().NumLocals(),
 		frames: frames,
 		framesIndex: 1,
 		Cabinet: &memory.Lemari,
@@ -456,7 +461,6 @@ func executeTask(ptr memory.Ptr) {
 }
 
 func (vm *VM) snapshot() error {
-	// Not implemented for Phase X.4 MVP (Requires rewriting snapshot struct)
 	return nil
 }
 
@@ -464,32 +468,12 @@ func (vm *VM) rollback() error { return nil }
 func (vm *VM) commit() error { return nil }
 
 func ensureOnHeap(obj object.Object) error {
-	switch o := obj.(type) {
-	case *object.Integer:
-		if o.Address != 0 { return nil }
-		ptr, err := memory.AllocInteger(o.Value)
-		if err != nil { return err }
-		o.Address = ptr
-	case *object.String:
-		if o.Address != 0 { return nil }
-		ptr, err := memory.AllocString(o.Value)
-		if err != nil { return err }
-		o.Address = ptr
-	case *object.Boolean:
-		if o.Address != 0 { return nil }
-		ptr, err := memory.AllocBoolean(o.Value)
-		if err != nil { return err }
-		o.Address = ptr
+	if obj.GetAddress() == memory.NilPtr {
+		return fmt.Errorf("ensureOnHeap: object %s has nil address", obj.Type())
 	}
 	return nil
 }
 
 func getObjectAddress(obj object.Object) memory.Ptr {
-	switch o := obj.(type) {
-	case *object.Integer: return o.Address
-	case *object.String: return o.Address
-	case *object.Boolean: return o.Address
-	case *object.Null: return memory.NilPtr
-	}
-	return 0
+	return obj.GetAddress()
 }

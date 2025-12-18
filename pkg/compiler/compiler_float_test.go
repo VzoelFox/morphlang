@@ -128,8 +128,8 @@ func testIntegerObject(expected int64, actual object.Object) error {
 		return fmt.Errorf("object is not Integer. got=%T (%+v)", actual, actual)
 	}
 
-	if result.Value != expected {
-		return fmt.Errorf("object has wrong value. got=%d, want=%d", result.Value, expected)
+	if result.GetValue() != expected {
+		return fmt.Errorf("object has wrong value. got=%d, want=%d", result.GetValue(), expected)
 	}
 
 	return nil
@@ -141,8 +141,8 @@ func testFloatObject(expected float64, actual object.Object) error {
 		return fmt.Errorf("object is not Float. got=%T (%+v)", actual, actual)
 	}
 
-	if result.Value != expected {
-		return fmt.Errorf("object has wrong value. got=%f, want=%f", result.Value, expected)
+	if result.GetValue() != expected {
+		return fmt.Errorf("object has wrong value. got=%f, want=%f", result.GetValue(), expected)
 	}
 
 	return nil

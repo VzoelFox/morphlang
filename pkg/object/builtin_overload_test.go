@@ -7,7 +7,7 @@ import (
 func TestBuiltinOverloading(t *testing.T) {
 	// 1. Define Base Builtin
 	RegisterBuiltin("test_overload", func(args ...Object) Object {
-		return &String{Value: "ORIGINAL"}
+		return NewString("ORIGINAL")
 	})
 
 	// 2. Overload with function that fails due to Argument Mismatch
@@ -16,7 +16,7 @@ func TestBuiltinOverloading(t *testing.T) {
 			// This returns an error with Code=E008 (MissingArgs)
 			return newArgumentError(len(args), 1)
 		}
-		return &String{Value: "NEW"}
+		return NewString("NEW")
 	})
 
 	// 3. Call with 0 args -> Should trigger "NEW", fail (E008), then fallback to "ORIGINAL"
@@ -30,7 +30,7 @@ func TestBuiltinOverloading(t *testing.T) {
 	}
 
 	// 4. Call with 1 arg -> Should succeed in "NEW"
-	result = fn(&Null{})
+	result = fn(NewNull())
 	if result.Inspect() != "NEW" {
 		t.Errorf("Overloading new function failed. Expected 'NEW', got %s", result.Inspect())
 	}

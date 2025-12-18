@@ -57,7 +57,7 @@ func testFloatObjectApprox(t *testing.T, obj object.Object, expected float64, ep
 		return
 	}
 
-	if math.Abs(result.Value-expected) > epsilon {
-		t.Errorf("object has wrong value. got=%f, want=%f (epsilon=%f)", result.Value, expected, epsilon)
+	if math.Abs(result.GetValue()-expected) > epsilon {
+		t.Errorf("object has wrong value. got=%f, want=%f (epsilon=%f)", result.GetValue(), expected, epsilon)
 	}
 }
