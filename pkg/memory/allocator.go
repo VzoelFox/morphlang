@@ -77,7 +77,7 @@ func (c *Cabinet) alloc(size int) (Ptr, error) {
 		// Create new drawer.
 		newDrawer := CreateDrawer()
 		if newDrawer == nil {
-			return NilPtr, fmt.Errorf("virtual memory limit reached")
+			return NilPtr, ErrOOM
 		}
 
 		c.ActiveDrawerIndex = newDrawer.ID

@@ -82,6 +82,7 @@ type Cabinet struct {
 
 	// GC Interface
 	RootProvider func() []*Ptr
+	GCTrigger    func()
 	IsGCRunning  bool
 }
 

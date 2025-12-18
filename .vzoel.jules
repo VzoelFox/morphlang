@@ -52,5 +52,14 @@
     "context_hash": "",
     "prev_hash": "d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     "hash": "e5f67890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12"
+  },
+  {
+    "index": 6,
+    "timestamp": "2025-12-18T22:45:00.000000000Z",
+    "user": "Implement Stop-The-World for GC",
+    "assistant": "Implemented `GlobalVMLock` (RWMutex) in `pkg/vm` to coordinate Stop-The-World. Updated `Run` loop to hold RLock and yield at Safe Points. Integrated `TriggerGC` callback which upgrades to Write Lock. Updated `Alloc` to return `ErrOOM` instead of deadlock-prone direct call. This completes the Phase X.4 GC infrastructure.",
+    "context_hash": "",
+    "prev_hash": "e5f67890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12",
+    "hash": "f6g7h8i9j01234567890abcdef1234567890abcdef1234567890abcdef123456"
   }
 ]

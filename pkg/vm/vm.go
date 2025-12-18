@@ -27,6 +27,7 @@ var (
 	taskRegistry  sync.Map
 	taskIDGen     int64
 	activeVMs     sync.Map
+	GlobalVMLock  sync.RWMutex
 )
 
 type TaskContext struct {
@@ -164,6 +165,9 @@ func (vm *VM) Run() (err error) {
 			err = fmt.Errorf("VM CRASH: %v", r)
 		}
 	}()
+
+	GlobalVMLock.RLock()
+	defer GlobalVMLock.RUnlock()
 
 	var ip int
 	var ins compiler.Instructions
@@ -318,6 +322,8 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpJump:
 			pos := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip = pos - 1
+			GlobalVMLock.RUnlock()
+			GlobalVMLock.RLock()
 
 		case compiler.OpJumpNotTruthy:
 			pos := int(compiler.ReadUint16(ins[ip+1:]))
@@ -502,6 +508,20 @@ func ensureOnHeap(obj object.Object) error {
 
 func getObjectAddress(obj object.Object) memory.Ptr {
 	return obj.GetAddress()
+}
+
+func TriggerGC() {
+	GlobalVMLock.RUnlock()
+	GlobalVMLock.Lock()
+
+	roots := GlobalRootProvider()
+	err := memory.Lemari.MarkAndCompact(roots)
+	if err != nil {
+		fmt.Printf("GC Error: %v\n", err)
+	}
+
+	GlobalVMLock.Unlock()
+	GlobalVMLock.RLock()
 }
 
 func GlobalRootProvider() []*memory.Ptr {
