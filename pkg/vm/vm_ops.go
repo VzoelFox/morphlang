@@ -127,6 +127,11 @@ func (vm *VM) executeComparison(op compiler.Opcode) error {
 		return vm.push(ptr)
 	}
 
+	if leftHeader.Type == memory.TagNull && rightHeader.Type == memory.TagNull {
+		if op == compiler.OpEqual { return vm.push(TruePtr) }
+		if op == compiler.OpNotEqual { return vm.push(FalsePtr) }
+	}
+
 	if op == compiler.OpEqual {
 		return vm.push(FalsePtr) // Default false for different types
 	}
@@ -426,5 +431,6 @@ func equals(p1, p2 memory.Ptr) bool {
 		v2, _ := memory.ReadBoolean(p2)
 		return v1 == v2
 	}
+	if h1.Type == memory.TagNull { return true }
 	return false
 }

@@ -594,7 +594,7 @@ func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
 	res := builtin.Fn(args...)
 
 	if errObj, ok := res.(*object.Error); ok {
-		if errObj.GetMessage() == "luncurkan() requires VM context" {
+		if errObj.GetCode() == object.ErrCodeSignalLaunch {
 			tObj, err := vm.spawn(args)
 			if err != nil {
 				res = object.NewError(err.Error(), "", 0, 0)
