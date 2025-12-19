@@ -25,28 +25,47 @@ func main() {
 		}
 	}()
 
-	debug := flag.Bool("debug", false, "Enable debug output")
-	check := flag.Bool("check", false, "Check syntax only")
-	useVM := flag.Bool("vm", false, "Run using Bytecode VM")
-	flag.Parse()
+	var debugMode, checkMode, useVMMode bool
+	var filename string
 
-	args := flag.Args()
-	if len(args) == 0 {
-		fmt.Println("Usage: morph [options] <file>")
-		os.Exit(1)
-	}
+	// Hybrid Flag Parsing: Support both `morph compile --debug` and `morph --debug compile`
+	if len(os.Args) > 1 && os.Args[1] == "compile" {
+		// Subcommand Mode: morph compile [flags] <file>
+		compileCmd := flag.NewFlagSet("compile", flag.ExitOnError)
+		compileCmd.BoolVar(&debugMode, "debug", false, "Enable debug output")
+		compileCmd.BoolVar(&checkMode, "check", false, "Check syntax only")
+		compileCmd.BoolVar(&useVMMode, "vm", false, "Run using Bytecode VM")
 
-	cmd := args[0]
-	filename := ""
+		compileCmd.Parse(os.Args[2:])
+		args := compileCmd.Args()
 
-	if cmd == "compile" {
-		if len(args) < 2 {
-			fmt.Println("Usage: morph compile <file>")
+		if len(args) < 1 {
+			fmt.Println("Usage: morph compile [options] <file>")
 			os.Exit(1)
 		}
-		filename = args[1]
+		filename = args[0]
 	} else {
-		filename = cmd
+		// Root Mode: morph [flags] [compile] <file>
+		flag.BoolVar(&debugMode, "debug", false, "Enable debug output")
+		flag.BoolVar(&checkMode, "check", false, "Check syntax only")
+		flag.BoolVar(&useVMMode, "vm", false, "Run using Bytecode VM")
+		flag.Parse()
+
+		args := flag.Args()
+		if len(args) == 0 {
+			fmt.Println("Usage: morph [options] <file>")
+			os.Exit(1)
+		}
+
+		if args[0] == "compile" {
+			if len(args) < 2 {
+				fmt.Println("Usage: morph compile <file>")
+				os.Exit(1)
+			}
+			filename = args[1]
+		} else {
+			filename = args[0]
+		}
 	}
 
 	// Read file
@@ -65,7 +84,7 @@ func main() {
 	program := p.ParseProgram()
 
 	// Debug Output
-	if *debug {
+	if debugMode {
 		fmt.Printf("=== Morph Compiler Debug Output ===\n")
 		fmt.Printf("File: %s\n", filename)
 		fmt.Printf("Compiled: %s\n", time.Now().Format(time.RFC3339))
@@ -110,7 +129,7 @@ func main() {
 			}
 			file.Close()
 
-			if *debug {
+			if debugMode {
 				fmt.Printf("\n--- Context File ---\n")
 				fmt.Printf("Generated: %s\n", outPath)
 			}
@@ -126,7 +145,7 @@ func main() {
 	}
 
 	// VM Execution
-	if *useVM {
+	if useVMMode {
 		comp := compiler.New()
 		err := comp.Compile(program)
 		if err != nil {
@@ -151,7 +170,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !*check {
+	if !checkMode {
 		fmt.Printf("Successfully compiled %s\n", filename)
 	}
 }
