@@ -1,7 +1,6 @@
 package compiler
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,9 +31,15 @@ type CompilationScope struct {
 	loopScopes          []LoopScope
 }
 
+type CompilerState struct {
+	Constants    []object.Object
+	ModuleCache  map[string]int
+	LoadingStack map[string]bool
+}
+
 type Compiler struct {
 	instructions        Instructions
-	constants           []object.Object
+	state               *CompilerState
 	lastInstruction     EmittedInstruction
 	previousInstruction EmittedInstruction
 	symbolTable         *SymbolTable
@@ -47,6 +52,14 @@ type Compiler struct {
 }
 
 func New() *Compiler {
+	return NewWithState(&CompilerState{
+		Constants:    []object.Object{},
+		ModuleCache:  make(map[string]int),
+		LoadingStack: make(map[string]bool),
+	})
+}
+
+func NewWithState(state *CompilerState) *Compiler {
 	mainScope := CompilationScope{
 		instructions:        Instructions{},
 		lastInstruction:     EmittedInstruction{},
@@ -55,10 +68,10 @@ func New() *Compiler {
 	}
 
 	return &Compiler{
-		constants:   []object.Object{},
-		symbolTable: NewSymbolTable(),
-		scopes:      []CompilationScope{mainScope},
-		scopeIndex:  0,
+		state:        state,
+		symbolTable:  NewSymbolTable(),
+		scopes:       []CompilationScope{mainScope},
+		scopeIndex:   0,
 	}
 }
 
@@ -453,11 +466,16 @@ func (c *Compiler) Compile(node parser.Node) error {
 		})
 
 		for _, key := range keys {
-			err := c.Compile(key)
-			if err != nil {
-				return err
+			if ident, ok := key.(*parser.Identifier); ok {
+				c.emit(OpLoadConst, c.addConstant(object.NewString(ident.Value)))
+			} else {
+				err := c.Compile(key)
+				if err != nil {
+					return err
+				}
 			}
-			err = c.Compile(node.Pairs[key])
+
+			err := c.Compile(node.Pairs[key])
 			if err != nil {
 				return err
 			}
@@ -507,7 +525,7 @@ func (c *Compiler) Compile(node parser.Node) error {
 			return err
 		}
 
-		c.emit(OpClosure, modIdx, 0)
+		c.emit(OpLoadConst, modIdx)
 		c.emit(OpCall, 0)
 
 		if len(node.Identifiers) == 0 {
@@ -610,7 +628,7 @@ func (c *Compiler) Compile(node parser.Node) error {
 func (c *Compiler) Bytecode() *Bytecode {
 	return &Bytecode{
 		Instructions: c.scopes[0].instructions,
-		Constants:    c.constants,
+		Constants:    c.state.Constants,
 	}
 }
 
@@ -646,8 +664,8 @@ type Bytecode struct {
 }
 
 func (c *Compiler) addConstant(obj object.Object) int {
-	c.constants = append(c.constants, obj)
-	return len(c.constants) - 1
+	c.state.Constants = append(c.state.Constants, obj)
+	return len(c.state.Constants) - 1
 }
 
 func (c *Compiler) emit(op Opcode, operands ...int) int {
@@ -707,6 +725,16 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		path = "lib/" + path
 	}
 
+	// Check Cache
+	if idx, ok := c.state.ModuleCache[path]; ok {
+		return idx, nil
+	}
+
+	// Create Partial Module
+	mod := object.NewModule(path, &object.CompiledFunction{Address: memory.NilPtr})
+	modIdx := c.addConstant(mod)
+	c.state.ModuleCache[path] = modIdx
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return 0, fmt.Errorf("import error: %v", err)
@@ -754,78 +782,30 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		Body:  &parser.BlockStatement{Statements: prog.Statements},
 	}
 
-	subComp := New()
+	subComp := NewWithState(c.state)
 	err = subComp.Compile(wrapperFn)
 	if err != nil {
 		return 0, fmt.Errorf("import compile error in %s: %v", path, err)
 	}
 
 	bc := subComp.Bytecode()
-
-	indexMap := make(map[int]int)
-	for i, constant := range bc.Constants {
-		indexMap[i] = c.addConstant(constant)
-	}
-
-	for oldIdx, constant := range bc.Constants {
-		if fn, ok := constant.(*object.CompiledFunction); ok {
-			newIdx := indexMap[oldIdx]
-
-			oldInstr, oldLocals, oldParams, err := memory.ReadCompiledFunction(fn.Address)
-			if err != nil {
-				return 0, err
-			}
-
-			newInstr := make([]byte, len(oldInstr))
-			copy(newInstr, oldInstr)
-
-			c.remapInstructions(newInstr, indexMap)
-
-			ptr, err := memory.AllocCompiledFunction(newInstr, oldLocals, oldParams)
-			if err != nil {
-				return 0, err
-			}
-
-			newFn := &object.CompiledFunction{Address: ptr}
-			c.constants[newIdx] = newFn
-		}
-	}
-
 	if len(bc.Instructions) < 3 || Opcode(bc.Instructions[0]) != OpClosure {
 		return 0, fmt.Errorf("import wrapper compilation failed struct")
 	}
 
 	wrapperConstIdx := int(ReadUint16(bc.Instructions[1:]))
-
-	return indexMap[wrapperConstIdx], nil
-}
-
-func (c *Compiler) remapInstructions(ins []byte, indexMap map[int]int) {
-	offset := 0
-	for offset < len(ins) {
-		op := Opcode(ins[offset])
-		def, err := Lookup(byte(op))
-		if err != nil {
-			offset++
-			continue
-		}
-
-		if op == OpLoadConst || op == OpClosure {
-			operands, _ := ReadOperands(def, ins[offset+1:])
-
-			if len(def.OperandWidths) == 1 && def.OperandWidths[0] == 2 {
-				oldIdx := operands[0]
-				if newIdx, ok := indexMap[oldIdx]; ok {
-					binary.BigEndian.PutUint16(ins[offset+1:], uint16(newIdx))
-				}
-			}
-		}
-
-		offset += 1
-		for _, w := range def.OperandWidths {
-			offset += w
-		}
+	wrapperFnObj := c.state.Constants[wrapperConstIdx]
+	wrapperCompiledFn, ok := wrapperFnObj.(*object.CompiledFunction)
+	if !ok {
+		return 0, fmt.Errorf("import wrapper is not a compiled function")
 	}
+
+	// Update Module Init
+	if err := memory.WriteModuleInit(mod.Address, wrapperCompiledFn.Address); err != nil {
+		return 0, err
+	}
+
+	return modIdx, nil
 }
 
 func (c *Compiler) currentLoopScope() *LoopScope {

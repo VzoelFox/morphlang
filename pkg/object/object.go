@@ -36,6 +36,7 @@ const (
 	ATOM_OBJ              = "ATOM"
 	FILE_OBJ              = "FILE"
 	POINTER_OBJ           = "POINTER"
+	MODULE_OBJ            = "MODULE"
 )
 
 type Object interface {
@@ -519,4 +520,33 @@ func (h *Hash) GetPairs() []HashPair {
 		pairs[i] = HashPair{Key: FromPtr(kPtr), Value: FromPtr(vPtr)}
 	}
 	return pairs
+}
+
+type Module struct {
+	Address memory.Ptr
+	Name    string
+}
+
+func NewModule(name string, init *CompiledFunction) *Module {
+	ptr, err := memory.AllocModule(init.Address, memory.NilPtr)
+	if err != nil { panic(err) }
+	return &Module{Address: ptr, Name: name}
+}
+
+func (m *Module) Type() ObjectType { return MODULE_OBJ }
+func (m *Module) Inspect() string { return fmt.Sprintf("Module[%s]", m.Name) }
+func (m *Module) GetAddress() memory.Ptr { return m.Address }
+
+func (m *Module) GetExports() Object {
+	_, expPtr, _ := memory.ReadModule(m.Address)
+	return FromPtr(expPtr)
+}
+
+func (m *Module) SetExports(obj Object) {
+	memory.WriteModuleExports(m.Address, obj.GetAddress())
+}
+
+func (m *Module) GetInit() *CompiledFunction {
+	initPtr, _, _ := memory.ReadModule(m.Address)
+	return &CompiledFunction{Address: initPtr}
 }
