@@ -285,6 +285,7 @@ type FunctionLiteral struct {
 	Name       string
 	Parameters []*Identifier
 	Body       *BlockStatement
+	Doc        string
 }
 
 func (fl *FunctionLiteral) expressionNode()      {}
@@ -345,6 +346,27 @@ func (rs *ReturnStatement) String() string {
 		out.WriteString(rs.ReturnValue.String())
 	}
 	out.WriteString(";")
+	return out.String()
+}
+
+type StructStatement struct {
+	Token  lexer.Token // The 'struktur' token
+	Name   *Identifier
+	Fields []*Identifier
+	Doc    string
+}
+
+func (ss *StructStatement) statementNode()       {}
+func (ss *StructStatement) TokenLiteral() string { return ss.Token.Literal }
+func (ss *StructStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("struktur ")
+	out.WriteString(ss.Name.String())
+	out.WriteString("\n")
+	for _, f := range ss.Fields {
+		out.WriteString("  " + f.String() + "\n")
+	}
+	out.WriteString("akhir")
 	return out.String()
 }
 

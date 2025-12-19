@@ -89,6 +89,8 @@ type Parser struct {
 	curToken  lexer.Token
 	peekToken lexer.Token
 
+	curComment string
+
 	prefixParseFns map[lexer.TokenType]prefixParseFn
 	infixParseFns  map[lexer.TokenType]infixParseFn
 }
@@ -208,10 +210,20 @@ func (p *Parser) ParseProgram() *Program {
 	program.Statements = []Statement{}
 
 	for p.curToken.Type != lexer.EOF {
+		if p.curToken.Type == lexer.COMMENT {
+			if p.curComment != "" {
+				p.curComment += "\n"
+			}
+			p.curComment += p.curToken.Literal
+			p.nextToken()
+			continue
+		}
+
 		stmt := p.parseStatement()
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
 		}
+		p.curComment = ""
 		p.nextToken()
 	}
 
@@ -226,6 +238,8 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseImportStatement()
 	case lexer.DARI:
 		return p.parseFromImportStatement()
+	case lexer.STRUKTUR:
+		return p.parseStructStatement()
 	case lexer.BERHENTI:
 		return p.parseBreakStatement()
 	case lexer.LANJUT:
@@ -296,6 +310,40 @@ func (p *Parser) parseFromImportStatement() *ImportStatement {
 
 	if p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseStructStatement() *StructStatement {
+	stmt := &StructStatement{Token: p.curToken}
+	stmt.Doc = p.curComment
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+	p.nextToken()
+
+	for !p.curTokenIs(lexer.AKHIR) && !p.curTokenIs(lexer.EOF) {
+		if p.curTokenIs(lexer.SEMICOLON) {
+			p.nextToken()
+			continue
+		}
+
+		if p.curTokenIs(lexer.IDENT) {
+			field := &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+			stmt.Fields = append(stmt.Fields, field)
+			p.nextToken()
+		} else {
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(lexer.AKHIR) {
+		p.peekError(lexer.AKHIR)
+		return nil
 	}
 
 	return stmt
@@ -654,6 +702,7 @@ func (p *Parser) parseIfExpression() Expression {
 
 func (p *Parser) parseFunctionLiteral() Expression {
 	lit := &FunctionLiteral{Token: p.curToken}
+	lit.Doc = p.curComment
 
 	if p.peekTokenIs(lexer.IDENT) {
 		p.nextToken()

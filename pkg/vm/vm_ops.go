@@ -275,6 +275,31 @@ func (vm *VM) executeIndexExpression(left, index memory.Ptr) error {
 		return vm.push(ptr)
 	}
 
+	if header.Type == memory.TagStruct {
+		schemaPtr, err := memory.ReadStructSchema(left)
+		if err != nil { return err }
+
+		_, fieldsArrPtr, err := memory.ReadSchema(schemaPtr)
+		if err != nil { return err }
+
+		length, _ := memory.ReadArrayLength(fieldsArrPtr)
+
+		// Expect index to be String
+		targetKey, err := memory.ReadString(index)
+		if err != nil { return fmt.Errorf("struct key must be string") }
+
+		for i := 0; i < length; i++ {
+			fieldPtr, _ := memory.ReadArrayElement(fieldsArrPtr, i)
+			fieldName, _ := memory.ReadString(fieldPtr)
+			if fieldName == targetKey {
+				valPtr, err := memory.ReadStructField(left, i)
+				if err != nil { return err }
+				return vm.push(valPtr)
+			}
+		}
+		return vm.push(NullPtr)
+	}
+
 	return fmt.Errorf("index not supported for type tag %d", header.Type)
 }
 
