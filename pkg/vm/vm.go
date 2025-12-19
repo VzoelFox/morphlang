@@ -97,6 +97,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 			FalsePtr = False.Address
 		}
 		memory.Lemari.RootProvider = GlobalRootProvider
+		memory.Lemari.GCTrigger = TriggerGC
 	})
 
 	schedulerOnce.Do(func() {
@@ -457,7 +458,10 @@ func (vm *VM) spawn(args []object.Object) (*object.Thread, error) {
 }
 
 func executeTask(ptr memory.Ptr) {
+	GlobalVMLock.RLock()
 	id, _ := memory.ReadInteger(ptr)
+	GlobalVMLock.RUnlock()
+
 	val, ok := taskRegistry.Load(id)
 	if !ok { return }
 	taskRegistry.Delete(id)
@@ -511,17 +515,38 @@ func getObjectAddress(obj object.Object) memory.Ptr {
 }
 
 func TriggerGC() {
-	GlobalVMLock.RUnlock()
+	// Startup Safety Guard:
+	// We attempt to release the RLock. If this panics, it means the caller
+	// did NOT hold the RLock (e.g., inside New() or unmanaged thread).
+	// In that case, we are in an unsafe state to run GC (roots might be missing).
+	// So we abort the GC attempt and let Alloc fail with ErrOOM.
+	safeToRun := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				safeToRun = false
+			}
+		}()
+		GlobalVMLock.RUnlock()
+		safeToRun = true
+	}()
+
+	if !safeToRun {
+		return
+	}
+
 	GlobalVMLock.Lock()
+	// Ensure we restore the lock state for the caller
+	defer func() {
+		GlobalVMLock.Unlock()
+		GlobalVMLock.RLock()
+	}()
 
 	roots := GlobalRootProvider()
 	err := memory.Lemari.MarkAndCompact(roots)
 	if err != nil {
 		fmt.Printf("GC Error: %v\n", err)
 	}
-
-	GlobalVMLock.Unlock()
-	GlobalVMLock.RLock()
 }
 
 func GlobalRootProvider() []*memory.Ptr {
@@ -530,6 +555,35 @@ func GlobalRootProvider() []*memory.Ptr {
 	// Global constants
 	if TruePtr != memory.NilPtr { roots = append(roots, &TruePtr) }
 	if FalsePtr != memory.NilPtr { roots = append(roots, &FalsePtr) }
+
+	// Scheduler Roots
+	if scheduler.Global != nil && scheduler.Global.Queue != nil {
+		roots = append(roots, &scheduler.Global.Queue.Address)
+	}
+
+	// Task Registry Roots
+	taskRegistry.Range(func(key, value interface{}) bool {
+		ctx := value.(TaskContext)
+		if ctx.Closure != nil {
+			roots = append(roots, &ctx.Closure.Address)
+		}
+		for i := range ctx.Globals {
+			if ctx.Globals[i] != memory.NilPtr {
+				roots = append(roots, &ctx.Globals[i])
+			}
+		}
+		for _, obj := range ctx.Constants {
+			switch val := obj.(type) {
+			case *object.Integer: roots = append(roots, &val.Address)
+			case *object.Float: roots = append(roots, &val.Address)
+			case *object.Boolean: roots = append(roots, &val.Address)
+			case *object.String: roots = append(roots, &val.Address)
+			case *object.CompiledFunction: roots = append(roots, &val.Address)
+			case *object.Null: roots = append(roots, &val.Address)
+			}
+		}
+		return true
+	})
 
 	activeVMs.Range(func(key, value interface{}) bool {
 		vm := key.(*VM)
