@@ -45,7 +45,7 @@ func init() {
 	})
 
 	RegisterBuiltin("luncurkan", func(args ...Object) Object {
-		return NewError("luncurkan() requires VM context", ErrCodeRuntime, 0, 0)
+		return NewError("luncurkan() requires VM context", ErrCodeSignalLaunch, 0, 0)
 	})
 
 	RegisterBuiltin("tunggu", func(args ...Object) Object {
