@@ -44,6 +44,8 @@ type Compiler struct {
 	Input    string
 	Filename string
 	analyzed bool
+
+	loadingStack map[string]bool
 }
 
 func New() *Compiler {
@@ -55,10 +57,11 @@ func New() *Compiler {
 	}
 
 	return &Compiler{
-		constants:   []object.Object{},
-		symbolTable: NewSymbolTable(),
-		scopes:      []CompilationScope{mainScope},
-		scopeIndex:  0,
+		constants:    []object.Object{},
+		symbolTable:  NewSymbolTable(),
+		scopes:       []CompilationScope{mainScope},
+		scopeIndex:   0,
+		loadingStack: make(map[string]bool),
 	}
 }
 
@@ -453,11 +456,16 @@ func (c *Compiler) Compile(node parser.Node) error {
 		})
 
 		for _, key := range keys {
-			err := c.Compile(key)
-			if err != nil {
-				return err
+			if ident, ok := key.(*parser.Identifier); ok {
+				c.emit(OpLoadConst, c.addConstant(object.NewString(ident.Value)))
+			} else {
+				err := c.Compile(key)
+				if err != nil {
+					return err
+				}
 			}
-			err = c.Compile(node.Pairs[key])
+
+			err := c.Compile(node.Pairs[key])
 			if err != nil {
 				return err
 			}
@@ -707,6 +715,12 @@ func (c *Compiler) loadModule(path string) (int, error) {
 		path = "lib/" + path
 	}
 
+	if c.loadingStack[path] {
+		return 0, fmt.Errorf("circular import detected: %s", path)
+	}
+	c.loadingStack[path] = true
+	defer func() { delete(c.loadingStack, path) }()
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return 0, fmt.Errorf("import error: %v", err)
@@ -755,6 +769,7 @@ func (c *Compiler) loadModule(path string) (int, error) {
 	}
 
 	subComp := New()
+	subComp.loadingStack = c.loadingStack
 	err = subComp.Compile(wrapperFn)
 	if err != nil {
 		return 0, fmt.Errorf("import compile error in %s: %v", path, err)
