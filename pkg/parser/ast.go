@@ -2,6 +2,8 @@ package parser
 
 import (
 	"bytes"
+	"strings"
+
 	"github.com/VzoelFox/morphlang/pkg/lexer"
 )
 
@@ -72,6 +74,15 @@ func (il *IntegerLiteral) expressionNode()      {}
 func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
 func (il *IntegerLiteral) String() string       { return il.Token.Literal }
 
+type FloatLiteral struct {
+	Token lexer.Token
+	Value float64
+}
+
+func (fl *FloatLiteral) expressionNode()      {}
+func (fl *FloatLiteral) TokenLiteral() string { return fl.Token.Literal }
+func (fl *FloatLiteral) String() string       { return fl.Token.Literal }
+
 type StringLiteral struct {
 	Token lexer.Token
 	Value string
@@ -112,6 +123,70 @@ type BooleanLiteral struct {
 func (b *BooleanLiteral) expressionNode()      {}
 func (b *BooleanLiteral) TokenLiteral() string { return b.Token.Literal }
 func (b *BooleanLiteral) String() string       { return b.Token.Literal }
+
+type NullLiteral struct {
+	Token lexer.Token
+}
+
+func (n *NullLiteral) expressionNode()      {}
+func (n *NullLiteral) TokenLiteral() string { return n.Token.Literal }
+func (n *NullLiteral) String() string       { return n.Token.Literal }
+
+type ArrayLiteral struct {
+	Token    lexer.Token // '['
+	Elements []Expression
+}
+
+func (al *ArrayLiteral) expressionNode()      {}
+func (al *ArrayLiteral) TokenLiteral() string { return al.Token.Literal }
+func (al *ArrayLiteral) String() string {
+	var out bytes.Buffer
+	elements := []string{}
+	for _, el := range al.Elements {
+		elements = append(elements, el.String())
+	}
+	out.WriteString("[")
+	out.WriteString(strings.Join(elements, ", "))
+	out.WriteString("]")
+	return out.String()
+}
+
+type HashLiteral struct {
+	Token lexer.Token // '{'
+	Pairs map[Expression]Expression
+}
+
+func (hl *HashLiteral) expressionNode()      {}
+func (hl *HashLiteral) TokenLiteral() string { return hl.Token.Literal }
+func (hl *HashLiteral) String() string {
+	var out bytes.Buffer
+	pairs := []string{}
+	for key, value := range hl.Pairs {
+		pairs = append(pairs, key.String()+":"+value.String())
+	}
+	out.WriteString("{")
+	out.WriteString(strings.Join(pairs, ", "))
+	out.WriteString("}")
+	return out.String()
+}
+
+type IndexExpression struct {
+	Token lexer.Token // The [ token
+	Left  Expression
+	Index Expression
+}
+
+func (ie *IndexExpression) expressionNode()      {}
+func (ie *IndexExpression) TokenLiteral() string { return ie.Token.Literal }
+func (ie *IndexExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("(")
+	out.WriteString(ie.Left.String())
+	out.WriteString("[")
+	out.WriteString(ie.Index.String())
+	out.WriteString("])")
+	return out.String()
+}
 
 type PrefixExpression struct {
 	Token    lexer.Token
@@ -210,6 +285,7 @@ type FunctionLiteral struct {
 	Name       string
 	Parameters []*Identifier
 	Body       *BlockStatement
+	Doc        string
 }
 
 func (fl *FunctionLiteral) expressionNode()      {}
@@ -273,9 +349,70 @@ func (rs *ReturnStatement) String() string {
 	return out.String()
 }
 
+type StructStatement struct {
+	Token  lexer.Token // The 'struktur' token
+	Name   *Identifier
+	Fields []*Identifier
+	Doc    string
+}
+
+func (ss *StructStatement) statementNode()       {}
+func (ss *StructStatement) TokenLiteral() string { return ss.Token.Literal }
+func (ss *StructStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("struktur ")
+	out.WriteString(ss.Name.String())
+	out.WriteString("\n")
+	for _, f := range ss.Fields {
+		out.WriteString("  " + f.String() + "\n")
+	}
+	out.WriteString("akhir")
+	return out.String()
+}
+
+type BreakStatement struct {
+	Token lexer.Token
+}
+
+func (bs *BreakStatement) statementNode()       {}
+func (bs *BreakStatement) TokenLiteral() string { return bs.Token.Literal }
+func (bs *BreakStatement) String() string       { return bs.Token.Literal + ";" }
+
+type ContinueStatement struct {
+	Token lexer.Token
+}
+
+func (cs *ContinueStatement) statementNode()       {}
+func (cs *ContinueStatement) TokenLiteral() string { return cs.Token.Literal }
+func (cs *ContinueStatement) String() string       { return cs.Token.Literal + ";" }
+
+type ImportStatement struct {
+	Token       lexer.Token // The 'ambil' or 'dari' token
+	Path        string      // The file path
+	Identifiers []string    // Imported identifiers (if 'dari')
+}
+
+func (is *ImportStatement) statementNode()       {}
+func (is *ImportStatement) TokenLiteral() string { return is.Token.Literal }
+func (is *ImportStatement) String() string {
+	var out bytes.Buffer
+	if len(is.Identifiers) > 0 {
+		out.WriteString("dari \"")
+		out.WriteString(is.Path)
+		out.WriteString("\" ambil ")
+		out.WriteString(strings.Join(is.Identifiers, ", "))
+	} else {
+		out.WriteString("ambil \"")
+		out.WriteString(is.Path)
+		out.WriteString("\"")
+	}
+	out.WriteString(";")
+	return out.String()
+}
+
 type AssignmentStatement struct {
 	Token lexer.Token
-	Name  *Identifier
+	Name  Expression
 	Value Expression
 }
 

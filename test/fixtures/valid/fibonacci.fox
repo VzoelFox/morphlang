@@ -1,0 +1,9 @@
+# EXPECT: 55
+fungsi fib(n)
+  jika n < 2
+    kembalikan n
+  akhir
+  kembalikan fib(n - 1) + fib(n - 2)
+akhir
+
+cetak(fib(10))

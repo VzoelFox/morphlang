@@ -1,0 +1,13 @@
+x = 0
+selama x < 3
+  y = 0
+  selama y < 3
+    jika y == 1
+      berhenti
+    akhir
+    cetak("x: #{x}, y: #{y}")
+    y = y + 1
+  akhir
+  x = x + 1
+akhir
+cetak("Done Nested")

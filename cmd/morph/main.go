@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/VzoelFox/morphlang/pkg/analysis"
+	"github.com/VzoelFox/morphlang/pkg/compiler"
 	"github.com/VzoelFox/morphlang/pkg/lexer"
 	"github.com/VzoelFox/morphlang/pkg/parser"
+	"github.com/VzoelFox/morphlang/pkg/vm"
 )
 
 func main() {
@@ -23,27 +25,47 @@ func main() {
 		}
 	}()
 
-	debug := flag.Bool("debug", false, "Enable debug output")
-	check := flag.Bool("check", false, "Check syntax only")
-	flag.Parse()
+	var debugMode, checkMode, useVMMode bool
+	var filename string
 
-	args := flag.Args()
-	if len(args) == 0 {
-		fmt.Println("Usage: morph [options] <file>")
-		os.Exit(1)
-	}
+	// Hybrid Flag Parsing: Support both `morph compile --debug` and `morph --debug compile`
+	if len(os.Args) > 1 && os.Args[1] == "compile" {
+		// Subcommand Mode: morph compile [flags] <file>
+		compileCmd := flag.NewFlagSet("compile", flag.ExitOnError)
+		compileCmd.BoolVar(&debugMode, "debug", false, "Enable debug output")
+		compileCmd.BoolVar(&checkMode, "check", false, "Check syntax only")
+		compileCmd.BoolVar(&useVMMode, "vm", false, "Run using Bytecode VM")
 
-	cmd := args[0]
-	filename := ""
+		compileCmd.Parse(os.Args[2:])
+		args := compileCmd.Args()
 
-	if cmd == "compile" {
-		if len(args) < 2 {
-			fmt.Println("Usage: morph compile <file>")
+		if len(args) < 1 {
+			fmt.Println("Usage: morph compile [options] <file>")
 			os.Exit(1)
 		}
-		filename = args[1]
+		filename = args[0]
 	} else {
-		filename = cmd
+		// Root Mode: morph [flags] [compile] <file>
+		flag.BoolVar(&debugMode, "debug", false, "Enable debug output")
+		flag.BoolVar(&checkMode, "check", false, "Check syntax only")
+		flag.BoolVar(&useVMMode, "vm", false, "Run using Bytecode VM")
+		flag.Parse()
+
+		args := flag.Args()
+		if len(args) == 0 {
+			fmt.Println("Usage: morph [options] <file>")
+			os.Exit(1)
+		}
+
+		if args[0] == "compile" {
+			if len(args) < 2 {
+				fmt.Println("Usage: morph compile <file>")
+				os.Exit(1)
+			}
+			filename = args[1]
+		} else {
+			filename = args[0]
+		}
 	}
 
 	// Read file
@@ -62,7 +84,7 @@ func main() {
 	program := p.ParseProgram()
 
 	// Debug Output
-	if *debug {
+	if debugMode {
 		fmt.Printf("=== Morph Compiler Debug Output ===\n")
 		fmt.Printf("File: %s\n", filename)
 		fmt.Printf("Compiled: %s\n", time.Now().Format(time.RFC3339))
@@ -89,45 +111,66 @@ func main() {
 		}
 	}
 
-	// Analysis & Context Generation
+	// Analysis & Context Generation (Always generate context first)
 	ctx, err := analysis.GenerateContext(program, filename, input, p.Errors())
 	if err != nil {
 		fmt.Printf("Analysis error: %v\n", err)
-		os.Exit(1)
-	}
+	} else {
+		// Write .fox.vz
+		outPath := filename + ".vz"
+		file, err := os.Create(outPath)
+		if err != nil {
+			fmt.Printf("Error creating context file: %v\n", err)
+		} else {
+			enc := json.NewEncoder(file)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(ctx); err != nil {
+				fmt.Printf("Error writing context: %v\n", err)
+			}
+			file.Close()
 
-	// Write .fox.vz
-	outPath := filename + ".vz"
-	file, err := os.Create(outPath)
-	if err != nil {
-		fmt.Printf("Error creating context file: %v\n", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(ctx); err != nil {
-		fmt.Printf("Error writing context: %v\n", err)
-		os.Exit(1)
+			if debugMode {
+				fmt.Printf("\n--- Context File ---\n")
+				fmt.Printf("Generated: %s\n", outPath)
+			}
+		}
 	}
 
 	if len(p.Errors()) > 0 {
-		if !*check {
-			fmt.Printf("Compilation failed with %d errors.\n", len(p.Errors()))
-			for _, msg := range p.Errors() {
-				fmt.Println(msg)
-			}
-			os.Exit(1)
+		fmt.Printf("Parsing failed with %d errors.\n", len(p.Errors()))
+		for _, msg := range p.Errors() {
+			fmt.Println(msg)
 		}
-	} else {
-		if !*check {
-			fmt.Printf("Successfully compiled %s\n", filename)
-		}
+		os.Exit(1)
 	}
 
-	if *debug {
-		fmt.Printf("\n--- Context File ---\n")
-		fmt.Printf("Generated: %s\n", outPath)
+	// VM Execution
+	if useVMMode {
+		comp := compiler.New()
+		err := comp.Compile(program)
+		if err != nil {
+			fmt.Printf("Compilation failed:\n%s\n", err)
+			os.Exit(1)
+		}
+
+		machine := vm.New(comp.Bytecode())
+		err = machine.Run()
+		if err != nil {
+			fmt.Printf("Runtime error:\n%s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Compilation Check (Ensure logic validity)
+	comp := compiler.New()
+	err = comp.Compile(program)
+	if err != nil {
+		fmt.Printf("Compilation failed:\n%s\n", err)
+		os.Exit(1)
+	}
+
+	if !checkMode {
+		fmt.Printf("Successfully compiled %s\n", filename)
 	}
 }

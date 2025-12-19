@@ -7,12 +7,6 @@ import (
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
 
-var (
-	NULL  = &object.Null{}
-	TRUE  = &object.Boolean{Value: true}
-	FALSE = &object.Boolean{Value: false}
-)
-
 func Eval(node parser.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	// Statements
@@ -30,19 +24,21 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 		return &object.ReturnValue{Value: val}
 	case *parser.AssignmentStatement:
 		val := Eval(node.Value, env)
-		// Error as Value: we allow assigning Error objects to variables
-		env.Set(node.Name.Value, val)
 
-		// We return NULL to indicate the statement executed successfully (even if the assigned value is an error).
-		// This prevents the main evaluation loop from aborting execution when a variable is assigned an error value,
-		// allowing the user to check the variable with `adalah_galat(x)`.
-		return NULL
+		switch name := node.Name.(type) {
+		case *parser.Identifier:
+			env.Set(name.Value, val)
+		default:
+			return newError(node.Name, "assignment not supported in evaluator for %T", node.Name)
+		}
+
+		return object.NewNull()
 
 	// Expressions
 	case *parser.IntegerLiteral:
-		return &object.Integer{Value: node.Value}
+		return object.NewInteger(node.Value)
 	case *parser.StringLiteral:
-		return &object.String{Value: node.Value}
+		return object.NewString(node.Value)
 	case *parser.BooleanLiteral:
 		return nativeBoolToBooleanObject(node.Value)
 	case *parser.PrefixExpression:
@@ -81,8 +77,6 @@ func Eval(node parser.Node, env *object.Environment) object.Object {
 			return function
 		}
 		args := evalExpressions(node.Arguments, env)
-		// We REMOVE the check that aborts if an arg is an error.
-		// This allows functions (like adalah_galat) to receive Error objects.
 		return applyFunction(function, args)
 	}
 	return nil
@@ -103,31 +97,15 @@ func evalExpressions(exps []parser.Expression, env *object.Environment) []object
 }
 
 func applyFunction(fn object.Object, args []object.Object) object.Object {
-	// Check for propagated error in arguments
 	if len(args) == 1 && isError(args[0]) {
-		// If the function is a built-in that specifically handles errors, let it pass.
-		// Otherwise, propagate the error up.
 		if builtin, ok := fn.(*object.Builtin); ok {
-			// List of built-ins that accept errors
-			// TODO: Maybe add a flag to Builtin struct?
-			// For now, hardcode check or rely on Builtin logic?
-			// But Builtins are stored in map, we don't know their name here easily unless we look it up.
-			// Actually, Builtin struct only has Fn.
-			// We can try to run it. But if it's `panjang(error)`, `panjang` implementation checks type.
-			// If `panjang` doesn't support error, it returns error.
-			// But what if it's a User Function?
 			return builtin.Fn(args...)
 		}
-
-		// For user functions, we don't support passing Error objects as arguments yet
-		// (unless we add specific syntax for it, but AGENTS.md implies we check return values).
-		// So we propagate the error.
 		return args[0]
 	}
 
 	switch function := fn.(type) {
 	case *object.Function:
-		// Safety check for argument count
 		if len(args) != len(function.Parameters) {
 			return newError(nil, "argument mismatch: expected %d, got %d", len(function.Parameters), len(args))
 		}
@@ -207,9 +185,43 @@ func evalInfixExpression(node parser.Node, operator string, left, right object.O
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
 		return evalStringInfixExpression(node, operator, left, right)
 	case operator == "==":
-		return nativeBoolToBooleanObject(left == right)
+		if left.Type() != right.Type() {
+			return object.NewBoolean(false)
+		}
+		switch l := left.(type) {
+		case *object.Integer:
+			r := right.(*object.Integer)
+			return object.NewBoolean(l.GetValue() == r.GetValue())
+		case *object.Boolean:
+			r := right.(*object.Boolean)
+			return object.NewBoolean(l.GetValue() == r.GetValue())
+		case *object.String:
+			r := right.(*object.String)
+			return object.NewBoolean(l.GetValue() == r.GetValue())
+		case *object.Null:
+			return object.NewBoolean(true)
+		default:
+			return object.NewBoolean(left == right)
+		}
 	case operator == "!=":
-		return nativeBoolToBooleanObject(left != right)
+		if left.Type() != right.Type() {
+			return object.NewBoolean(true)
+		}
+		switch l := left.(type) {
+		case *object.Integer:
+			r := right.(*object.Integer)
+			return object.NewBoolean(l.GetValue() != r.GetValue())
+		case *object.Boolean:
+			r := right.(*object.Boolean)
+			return object.NewBoolean(l.GetValue() != r.GetValue())
+		case *object.String:
+			r := right.(*object.String)
+			return object.NewBoolean(l.GetValue() != r.GetValue())
+		case *object.Null:
+			return object.NewBoolean(false)
+		default:
+			return object.NewBoolean(left != right)
+		}
 	case left.Type() != right.Type():
 		return newError(node, "type mismatch: %s %s %s", left.Type(), operator, right.Type())
 	default:
@@ -218,21 +230,21 @@ func evalInfixExpression(node parser.Node, operator string, left, right object.O
 }
 
 func evalIntegerInfixExpression(node parser.Node, operator string, left, right object.Object) object.Object {
-	leftVal := left.(*object.Integer).Value
-	rightVal := right.(*object.Integer).Value
+	leftVal := left.(*object.Integer).GetValue()
+	rightVal := right.(*object.Integer).GetValue()
 
 	switch operator {
 	case "+":
-		return &object.Integer{Value: leftVal + rightVal}
+		return object.NewInteger(leftVal + rightVal)
 	case "-":
-		return &object.Integer{Value: leftVal - rightVal}
+		return object.NewInteger(leftVal - rightVal)
 	case "*":
-		return &object.Integer{Value: leftVal * rightVal}
+		return object.NewInteger(leftVal * rightVal)
 	case "/":
 		if rightVal == 0 {
 			return newError(node, "division by zero")
 		}
-		return &object.Integer{Value: leftVal / rightVal}
+		return object.NewInteger(leftVal / rightVal)
 	case "<":
 		return nativeBoolToBooleanObject(leftVal < rightVal)
 	case ">":
@@ -247,12 +259,12 @@ func evalIntegerInfixExpression(node parser.Node, operator string, left, right o
 }
 
 func evalStringInfixExpression(node parser.Node, operator string, left, right object.Object) object.Object {
-	leftVal := left.(*object.String).Value
-	rightVal := right.(*object.String).Value
+	leftVal := left.(*object.String).GetValue()
+	rightVal := right.(*object.String).GetValue()
 
 	switch operator {
 	case "+":
-		return &object.String{Value: leftVal + rightVal}
+		return object.NewString(leftVal + rightVal)
 	case "==":
 		return nativeBoolToBooleanObject(leftVal == rightVal)
 	case "!=":
@@ -263,16 +275,10 @@ func evalStringInfixExpression(node parser.Node, operator string, left, right ob
 }
 
 func evalBangOperatorExpression(right object.Object) object.Object {
-	switch right {
-	case TRUE:
-		return FALSE
-	case FALSE:
-		return TRUE
-	case NULL:
-		return TRUE
-	default:
-		return FALSE
+	if isTruthy(right) {
+		return object.NewBoolean(false)
 	}
+	return object.NewBoolean(true)
 }
 
 func evalMinusPrefixOperatorExpression(right object.Object, node parser.Node) object.Object {
@@ -280,8 +286,8 @@ func evalMinusPrefixOperatorExpression(right object.Object, node parser.Node) ob
 		return newError(node, "unknown operator: -%s", right.Type())
 	}
 
-	value := right.(*object.Integer).Value
-	return &object.Integer{Value: -value}
+	value := right.(*object.Integer).GetValue()
+	return object.NewInteger(-value)
 }
 
 func evalIdentifier(node *parser.Identifier, env *object.Environment) object.Object {
@@ -290,8 +296,8 @@ func evalIdentifier(node *parser.Identifier, env *object.Environment) object.Obj
 		return val
 	}
 
-	if builtin, ok := builtins[node.Value]; ok {
-		return builtin
+	if index := object.GetBuiltinByName(node.Value); index != -1 {
+		return object.Builtins[index].Builtin
 	}
 
 	return newError(node, "identifier not found: %s", node.Value)
@@ -308,12 +314,12 @@ func evalIfExpression(ie *parser.IfExpression, env *object.Environment) object.O
 	} else if ie.Alternative != nil {
 		return Eval(ie.Alternative, env)
 	} else {
-		return NULL
+		return object.NewNull()
 	}
 }
 
 func evalWhileExpression(we *parser.WhileExpression, env *object.Environment) object.Object {
-	var result object.Object = NULL
+	var result object.Object = object.NewNull()
 
 	for {
 		condition := Eval(we.Condition, env)
@@ -334,57 +340,47 @@ func evalWhileExpression(we *parser.WhileExpression, env *object.Environment) ob
 }
 
 func isTruthy(obj object.Object) bool {
-	switch obj {
-	case NULL:
+	switch obj := obj.(type) {
+	case *object.Null:
 		return false
-	case TRUE:
-		return true
-	case FALSE:
-		return false
+	case *object.Boolean:
+		return obj.GetValue()
 	default:
 		return true
 	}
 }
 
 func nativeBoolToBooleanObject(input bool) *object.Boolean {
-	if input {
-		return TRUE
-	}
-	return FALSE
+	return object.NewBoolean(input)
 }
 
 func newError(node parser.Node, format string, a ...interface{}) *object.Error {
 	msg := fmt.Sprintf(format, a...)
-	err := &object.Error{
-		Message: msg,
-		File:    "unknown", // Defaults, ideally we propagate file context too
-		Line:    0,
-		Column:  0,
-	}
+
+	line := 0
+	col := 0
 
 	if node != nil {
-		// Try to extract Token from known types or if we extended Node interface
-		// For now we check specifically for types we know have Tokens in AST
 		switch n := node.(type) {
 		case *parser.Identifier:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.IntegerLiteral:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.BooleanLiteral:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.PrefixExpression:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		case *parser.InfixExpression:
-			err.Line = n.Token.Line
-			err.Column = n.Token.Column
+			line = n.Token.Line
+			col = n.Token.Column
 		}
 	}
 
-	return err
+	return object.NewError(msg, "", line, col)
 }
 
 func isError(obj object.Object) bool {

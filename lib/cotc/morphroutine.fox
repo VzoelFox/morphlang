@@ -1,0 +1,87 @@
+# COTC: MorphRoutine (Unit-Shard-Fragment Scheduler)
+
+fungsi baru(data_array, ukuran_shard)
+  shards = []
+  total = panjang(data_array)
+  i = 0
+  id_shard = 0
+
+  selama i < total
+    akhir_idx = i + ukuran_shard
+    jika akhir_idx > total
+      akhir_idx = total
+    akhir
+
+    shard = {
+      "id": id_shard,
+      "start": i,
+      "end": akhir_idx,
+      "status": "pending"
+    }
+    shards = shards + [shard]
+
+    i = akhir_idx
+    id_shard = id_shard + 1
+  akhir
+
+  kembalikan {
+    "data": data_array,
+    "shards": shards,
+    "mutex": mutex_baru(),
+    "index": 0
+  }
+akhir
+
+fungsi unit_kerja(sched, tugas_fn, unit_id)
+  selama benar
+    gembok(sched.mutex)
+    idx = sched.index
+
+    jika idx >= panjang(sched.shards)
+      buka_gembok(sched.mutex)
+      kembalikan 0
+    akhir
+
+    sched.index = idx + 1
+    shard = sched.shards[idx]
+    shard["status"] = "processing"
+    buka_gembok(sched.mutex)
+
+    start = shard.start
+    end = shard.end
+    j = start
+
+    selama j < end
+      item = sched.data[j]
+      hasil = tugas_fn(item)
+      sched.data[j] = hasil
+      j = j + 1
+    akhir
+
+    shard["status"] = "done"
+  akhir
+akhir
+
+fungsi buat_wrapper(sched, tugas_fn, id)
+  kembalikan fungsi()
+    unit_kerja(sched, tugas_fn, id)
+  akhir
+akhir
+
+fungsi kerjakan(sched, tugas_fn, jumlah_unit)
+  units = []
+  i = 0
+  selama i < jumlah_unit
+    wrapper = buat_wrapper(sched, tugas_fn, i)
+    units = units + [luncurkan(wrapper)]
+    i = i + 1
+  akhir
+
+  i = 0
+  selama i < jumlah_unit
+    gabung(units[i])
+    i = i + 1
+  akhir
+
+  kembalikan sched.data
+akhir

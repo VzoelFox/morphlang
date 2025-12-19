@@ -1,0 +1,30 @@
+dari "lib/scheduler.fox" ambil antrian_baru, antrian_masuk, antrian_keluar
+
+q = antrian_baru(10)
+cetak("Antrian dibuat.")
+
+fungsi pekerja()
+  cetak("[Pekerja] Mulai...")
+  count = 0
+  selama count < 5
+    item = antrian_keluar(q)
+    jika item != kosong
+      cetak("[Pekerja] Proses: " + item)
+      count = count + 1
+    akhir
+  akhir
+  cetak("[Pekerja] Selesai.")
+  kembalikan "OK"
+akhir
+
+t = luncurkan(pekerja)
+
+i = 0
+selama i < 5
+  antrian_masuk(q, "Tugas-" + i)
+  cetak("[Main] Push Tugas-" + i)
+  i = i + 1
+akhir
+
+res = gabung(t)
+cetak("Worker Result: " + res)

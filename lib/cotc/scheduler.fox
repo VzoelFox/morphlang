@@ -1,0 +1,73 @@
+# COTC: Scheduler (Pemecah Otomatis)
+
+fungsi baru(data_array, ukuran_shard)
+  shards = []
+  total = panjang(data_array)
+  i = 0
+
+  selama i < total
+    akhir_idx = i + ukuran_shard
+    jika akhir_idx > total
+      akhir_idx = total
+    akhir
+
+    shards = shards + [{"start": i, "end": akhir_idx}]
+    i = akhir_idx
+  akhir
+
+  kembalikan {
+    "data": data_array,
+    "shards": shards,
+    "mutex": mutex_baru(),
+    "index": 0
+  }
+akhir
+
+fungsi pekerja_internal(sched, tugas_fn)
+  selama benar
+    gembok(sched.mutex)
+    idx = sched.index
+    cetak("Worker processing shard #{idx}")
+    jika idx >= panjang(sched.shards)
+      buka_gembok(sched.mutex)
+      kembalikan 0
+    akhir
+
+    sched.index = idx + 1
+    shard_info = sched.shards[idx]
+    buka_gembok(sched.mutex)
+
+    start = shard_info.start
+    end = shard_info.end
+
+    j = start
+    selama j < end
+      item = sched.data[j]
+      hasil = tugas_fn(item)
+      sched.data[j] = hasil
+      j = j + 1
+    akhir
+  akhir
+akhir
+
+fungsi jalankan(sched, tugas_fn, jumlah_thread)
+  threads = []
+  i = 0
+  selama i < jumlah_thread
+    wrapper = fungsi()
+      pekerja_internal(sched, tugas_fn)
+    akhir
+
+    threads = threads + [luncurkan(wrapper)]
+    i = i + 1
+  akhir
+
+  i = 0
+  selama i < jumlah_thread
+    res = gabung(threads[i])
+    cetak("Thread res: #{res}")
+    i = i + 1
+  akhir
+
+  kembalikan sched.data
+akhir

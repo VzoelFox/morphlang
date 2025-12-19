@@ -1,0 +1,63 @@
+# Scheduler Library (COTC)
+
+fungsi antrian_baru(kapasitas)
+  data = []
+  i = 0
+  selama i < kapasitas
+    data = data + [kosong]
+    i = i + 1
+  akhir
+
+  kembalikan {
+    "data": data,
+    "head": atom_baru(0),
+    "tail": atom_baru(0),
+    "kapasitas": kapasitas
+  }
+akhir
+
+fungsi antrian_masuk(q, item)
+  selama benar
+    tail_idx = atom_baca(q["tail"])
+    next_tail = tail_idx + 1
+
+    jika next_tail >= q["kapasitas"]
+       next_tail = 0
+    akhir
+
+    head_idx = atom_baca(q["head"])
+    jika head_idx == next_tail
+       kembalikan galat("Queue Penuh")
+    akhir
+
+    sukses = atom_tukar(q["tail"], tail_idx, next_tail)
+    jika sukses
+       # Critical Section: Write Data
+       q["data"][tail_idx] = item
+       kembalikan benar
+    akhir
+  akhir
+akhir
+
+fungsi antrian_keluar(q)
+  selama benar
+    head_idx = atom_baca(q["head"])
+    tail_idx = atom_baca(q["tail"])
+
+    jika head_idx == tail_idx
+       kembalikan kosong
+    akhir
+
+    item = q["data"][head_idx]
+
+    next_head = head_idx + 1
+    jika next_head >= q["kapasitas"]
+       next_head = 0
+    akhir
+
+    sukses = atom_tukar(q["head"], head_idx, next_head)
+    jika sukses
+       kembalikan item
+    akhir
+  akhir
+akhir

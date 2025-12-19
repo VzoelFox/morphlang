@@ -2,24 +2,97 @@ package compiler
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 
+	"github.com/VzoelFox/morphlang/pkg/analysis"
+	"github.com/VzoelFox/morphlang/pkg/lexer"
+	"github.com/VzoelFox/morphlang/pkg/memory"
 	"github.com/VzoelFox/morphlang/pkg/object"
 	"github.com/VzoelFox/morphlang/pkg/parser"
 )
 
+type EmittedInstruction struct {
+	Opcode   Opcode
+	Position int
+}
+
+type LoopScope struct {
+	BreakPos    []int
+	ContinuePos []int
+}
+
+type CompilationScope struct {
+	instructions        Instructions
+	lastInstruction     EmittedInstruction
+	previousInstruction EmittedInstruction
+	loopScopes          []LoopScope
+}
+
+type CompilerState struct {
+	Constants    []object.Object
+	ModuleCache  map[string]int
+	LoadingStack map[string]bool
+}
+
 type Compiler struct {
-	instructions Instructions
-	constants    []object.Object
+	instructions        Instructions
+	state               *CompilerState
+	lastInstruction     EmittedInstruction
+	previousInstruction EmittedInstruction
+	symbolTable         *SymbolTable
+	scopes              []CompilationScope
+	scopeIndex          int
+
+	Input    string
+	Filename string
+	analyzed bool
+
+	loadingStack map[string]bool
 }
 
 func New() *Compiler {
+	return NewWithState(&CompilerState{
+		Constants:    []object.Object{},
+		ModuleCache:  make(map[string]int),
+		LoadingStack: make(map[string]bool),
+	})
+}
+
+func NewWithState(state *CompilerState) *Compiler {
+	mainScope := CompilationScope{
+		instructions:        Instructions{},
+		lastInstruction:     EmittedInstruction{},
+		previousInstruction: EmittedInstruction{},
+		loopScopes:          []LoopScope{},
+	}
+
 	return &Compiler{
-		instructions: Instructions{},
-		constants:    []object.Object{},
+		state:        state,
+		symbolTable:  NewSymbolTable(),
+		scopes:       []CompilationScope{mainScope},
+		scopeIndex:   0,
 	}
 }
 
+func (c *Compiler) SetSource(filename, input string) {
+	c.Filename = filename
+	c.Input = input
+}
+
 func (c *Compiler) Compile(node parser.Node) error {
+	if c.Input != "" && !c.analyzed {
+		c.analyzed = true
+		if prog, ok := node.(*parser.Program); ok {
+			ctx, _ := analysis.GenerateContext(prog, c.Filename, c.Input, []parser.ParserError{})
+			if len(ctx.Errors) > 0 {
+				return fmt.Errorf("safety check failed: %s", ctx.Errors[0].Message)
+			}
+		}
+	}
+
 	switch node := node.(type) {
 	case *parser.Program:
 		for _, s := range node.Statements {
@@ -30,14 +103,189 @@ func (c *Compiler) Compile(node parser.Node) error {
 		}
 
 	case *parser.ExpressionStatement:
+		if node.Expression == nil {
+			return nil
+		}
+
+		if fn, ok := node.Expression.(*parser.FunctionLiteral); ok && fn.Name != "" {
+			symbol := c.symbolTable.Define(fn.Name)
+
+			err := c.Compile(fn)
+			if err != nil {
+				return err
+			}
+
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else if symbol.Scope == FreeScope {
+				c.emit(OpSetFree, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+			return nil
+		}
+
 		err := c.Compile(node.Expression)
 		if err != nil {
 			return err
 		}
 		c.emit(OpPop)
 
+	case *parser.BlockStatement:
+		for _, s := range node.Statements {
+			err := c.Compile(s)
+			if err != nil {
+				return err
+			}
+		}
+
+	case *parser.AssignmentStatement:
+		switch name := node.Name.(type) {
+		case *parser.Identifier:
+			err := c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
+
+			symbol, ok := c.symbolTable.Resolve(name.Value)
+			if !ok {
+				symbol = c.symbolTable.Define(name.Value)
+			}
+
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else if symbol.Scope == FreeScope {
+				c.emit(OpSetFree, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+
+		case *parser.IndexExpression:
+			err := c.Compile(name.Left)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(name.Index)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(node.Value)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpSetIndex)
+
+		default:
+			return fmt.Errorf("assignment to %T not supported", node.Name)
+		}
+
+	case *parser.Identifier:
+		symbol, ok := c.symbolTable.Resolve(node.Value)
+		if !ok {
+			builtinIndex := object.GetBuiltinByName(node.Value)
+			if builtinIndex >= 0 {
+				c.emit(OpGetBuiltin, builtinIndex)
+				return nil
+			}
+			return fmt.Errorf("undefined variable %s", node.Value)
+		}
+
+		if symbol.Scope == GlobalScope {
+			c.emit(OpLoadGlobal, symbol.Index)
+		} else if symbol.Scope == LocalScope {
+			c.emit(OpLoadLocal, symbol.Index)
+		} else if symbol.Scope == FreeScope {
+			c.emit(OpGetFree, symbol.Index)
+		}
+
+	case *parser.IfExpression:
+		err := c.Compile(node.Condition)
+		if err != nil {
+			return err
+		}
+
+		jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
+
+		err = c.Compile(node.Consequence)
+		if err != nil {
+			return err
+		}
+
+		if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
+			c.removeLastPop()
+		} else {
+			c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+		}
+
+		jumpPos := c.emit(OpJump, 9999)
+
+		afterConsequencePos := len(c.currentInstructions())
+		c.changeOperand(jumpNotTruthyPos, afterConsequencePos)
+
+		if node.Alternative == nil {
+			c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+		} else {
+			err = c.Compile(node.Alternative)
+			if err != nil {
+				return err
+			}
+
+			if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
+				c.removeLastPop()
+			} else {
+				c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+			}
+		}
+
+		afterAlternativePos := len(c.currentInstructions())
+		c.changeOperand(jumpPos, afterAlternativePos)
+
+	case *parser.WhileExpression:
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+
+		loopStartPos := len(c.currentInstructions())
+
+		err := c.Compile(node.Condition)
+		if err != nil {
+			return err
+		}
+
+		jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
+
+		c.enterLoop()
+
+		c.emit(OpPop)
+
+		err = c.Compile(node.Body)
+		if err != nil {
+			return err
+		}
+
+		if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
+			c.removeLastPop()
+		} else {
+			c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+		}
+
+		c.emit(OpJump, loopStartPos)
+
+		loopScope := c.leaveLoop()
+		afterLoopPos := len(c.currentInstructions())
+
+		c.changeOperand(jumpNotTruthyPos, afterLoopPos)
+
+		for _, pos := range loopScope.BreakPos {
+			c.changeOperand(pos, afterLoopPos)
+		}
+
+		for _, pos := range loopScope.ContinuePos {
+			c.changeOperand(pos, loopStartPos)
+		}
+
 	case *parser.InfixExpression:
-		// Re-order for comparison operators < and <=
 		if node.Operator == "<" {
 			err := c.Compile(node.Right)
 			if err != nil {
@@ -50,14 +298,65 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpGreaterThan)
 			return nil
 		}
-		// TODO: Handle <= if/when we have it, or transform it.
-		// For now we only have OpGreaterThan in opcodes?
-		// Spec has:
-		// 0x26 | GT | - | Pop b, Pop a, Push a > b.
-		// 0x27 | GTE | - | Pop b, Pop a, Push a >= b.
-		// It doesn't seem to have LT or LTE. The standard way is to swap operands.
-		// a < b  <=> b > a
-		// a <= b <=> b >= a
+
+		if node.Operator == "<=" {
+			err := c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+			err = c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+			c.emit(OpGreaterEqual)
+			return nil
+		}
+
+		if node.Token.Type == lexer.DAN {
+			err := c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpDup)
+			jumpPos := c.emit(OpJumpNotTruthy, 9999)
+
+			c.emit(OpPop)
+
+			err = c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+
+			afterRightPos := len(c.currentInstructions())
+			c.changeOperand(jumpPos, afterRightPos)
+			return nil
+		}
+
+		if node.Token.Type == lexer.ATAU {
+			err := c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+
+			c.emit(OpDup)
+			jumpNotTruthyPos := c.emit(OpJumpNotTruthy, 9999)
+			jumpPos := c.emit(OpJump, 9999)
+
+			afterLeftPos := len(c.currentInstructions())
+			c.changeOperand(jumpNotTruthyPos, afterLeftPos)
+
+			c.emit(OpPop)
+
+			err = c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+
+			afterRightPos := len(c.currentInstructions())
+			c.changeOperand(jumpPos, afterRightPos)
+			return nil
+		}
 
 		err := c.Compile(node.Left)
 		if err != nil {
@@ -80,17 +379,272 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpDiv)
 		case ">":
 			c.emit(OpGreaterThan)
+		case ">=":
+			c.emit(OpGreaterEqual)
 		case "==":
 			c.emit(OpEqual)
 		case "!=":
 			c.emit(OpNotEqual)
+		case "&":
+			c.emit(OpAnd)
+		case "|":
+			c.emit(OpOr)
+		case "^":
+			c.emit(OpXor)
+		case "<<":
+			c.emit(OpLShift)
+		case ">>":
+			c.emit(OpRShift)
+		default:
+			return fmt.Errorf("unknown operator %s", node.Operator)
+		}
+
+	case *parser.PrefixExpression:
+		err := c.Compile(node.Right)
+		if err != nil {
+			return err
+		}
+
+		switch node.Operator {
+		case "!":
+			c.emit(OpBang)
+		case "-":
+			c.emit(OpMinus)
+		case "~":
+			c.emit(OpBitNot)
 		default:
 			return fmt.Errorf("unknown operator %s", node.Operator)
 		}
 
 	case *parser.IntegerLiteral:
-		integer := &object.Integer{Value: node.Value}
+		integer := object.NewInteger(node.Value)
 		c.emit(OpLoadConst, c.addConstant(integer))
+
+	case *parser.FloatLiteral:
+		floatVal := object.NewFloat(node.Value)
+		c.emit(OpLoadConst, c.addConstant(floatVal))
+
+	case *parser.BooleanLiteral:
+		boolean := object.NewBoolean(node.Value)
+		c.emit(OpLoadConst, c.addConstant(boolean))
+
+	case *parser.NullLiteral:
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+
+	case *parser.StringLiteral:
+		str := object.NewString(node.Value)
+		c.emit(OpLoadConst, c.addConstant(str))
+
+	case *parser.InterpolatedString:
+		if len(node.Parts) == 0 {
+			c.emit(OpLoadConst, c.addConstant(object.NewString("")))
+		} else {
+			err := c.Compile(node.Parts[0])
+			if err != nil {
+				return err
+			}
+
+			for i := 1; i < len(node.Parts); i++ {
+				err := c.Compile(node.Parts[i])
+				if err != nil {
+					return err
+				}
+				c.emit(OpAdd)
+			}
+		}
+
+	case *parser.ArrayLiteral:
+		for _, el := range node.Elements {
+			err := c.Compile(el)
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(OpArray, len(node.Elements))
+
+	case *parser.HashLiteral:
+		keys := []parser.Expression{}
+		for k := range node.Pairs {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].String() < keys[j].String()
+		})
+
+		for _, key := range keys {
+			if ident, ok := key.(*parser.Identifier); ok {
+				c.emit(OpLoadConst, c.addConstant(object.NewString(ident.Value)))
+			} else {
+				err := c.Compile(key)
+				if err != nil {
+					return err
+				}
+			}
+
+			err := c.Compile(node.Pairs[key])
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(OpHash, len(node.Pairs)*2)
+
+	case *parser.IndexExpression:
+		err := c.Compile(node.Left)
+		if err != nil {
+			return err
+		}
+		err = c.Compile(node.Index)
+		if err != nil {
+			return err
+		}
+		c.emit(OpIndex)
+
+	case *parser.BreakStatement:
+		scope := c.currentLoopScope()
+		if scope == nil {
+			return fmt.Errorf("'berhenti' hanya boleh digunakan di dalam loop")
+		}
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+		pos := c.emit(OpJump, 9999)
+		scope.BreakPos = append(scope.BreakPos, pos)
+
+	case *parser.ContinueStatement:
+		scope := c.currentLoopScope()
+		if scope == nil {
+			return fmt.Errorf("'lanjut' hanya boleh digunakan di dalam loop")
+		}
+		c.emit(OpLoadConst, c.addConstant(object.NewNull()))
+		pos := c.emit(OpJump, 9999)
+		scope.ContinuePos = append(scope.ContinuePos, pos)
+
+	case *parser.ImportStatement:
+		path := node.Path
+		if !strings.HasSuffix(path, ".fox") {
+			path += ".fox"
+		}
+		base := filepath.Base(path)
+		ext := filepath.Ext(base)
+		moduleName := base[0 : len(base)-len(ext)]
+
+		modIdx, err := c.loadModule(path)
+		if err != nil {
+			return err
+		}
+
+		c.emit(OpLoadConst, modIdx)
+		c.emit(OpCall, 0)
+
+		if len(node.Identifiers) == 0 {
+			symbol := c.symbolTable.Define(moduleName)
+			if symbol.Scope == GlobalScope {
+				c.emit(OpStoreGlobal, symbol.Index)
+			} else {
+				c.emit(OpStoreLocal, symbol.Index)
+			}
+		} else {
+			for _, ident := range node.Identifiers {
+				c.emit(OpDup)
+				c.emit(OpLoadConst, c.addConstant(object.NewString(ident)))
+				c.emit(OpIndex)
+
+				symbol := c.symbolTable.Define(ident)
+				if symbol.Scope == GlobalScope {
+					c.emit(OpStoreGlobal, symbol.Index)
+				} else {
+					c.emit(OpStoreLocal, symbol.Index)
+				}
+			}
+			c.emit(OpPop)
+		}
+
+	case *parser.StructStatement:
+		for _, field := range node.Fields {
+			str := object.NewString(field.Value)
+			idx := c.addConstant(str)
+			c.emit(OpLoadConst, idx)
+		}
+
+		nameStr := object.NewString(node.Name.Value)
+		nameIdx := c.addConstant(nameStr)
+
+		c.emit(OpStruct, nameIdx, len(node.Fields))
+
+		symbol := c.symbolTable.Define(node.Name.Value)
+		if symbol.Scope == GlobalScope {
+			c.emit(OpStoreGlobal, symbol.Index)
+		} else {
+			c.emit(OpStoreLocal, symbol.Index)
+		}
+
+	case *parser.FunctionLiteral:
+		c.EnterScope()
+
+		for _, p := range node.Parameters {
+			c.symbolTable.Define(p.Value)
+		}
+
+		err := c.Compile(node.Body)
+		if err != nil {
+			return err
+		}
+
+		if c.scopes[c.scopeIndex].lastInstruction.Opcode == OpPop {
+			c.removeLastPop()
+			c.emit(OpReturnValue)
+		} else {
+			c.emit(OpReturn)
+		}
+
+		numLocals := c.symbolTable.numDefinitions
+		freeSymbols := c.symbolTable.FreeSymbols
+		instructions := c.LeaveScope()
+
+		for _, s := range freeSymbols {
+			symbol, ok := c.symbolTable.Resolve(s.Name)
+			if !ok {
+				return fmt.Errorf("free variable %s could not be resolved", s.Name)
+			}
+
+			if symbol.Scope == GlobalScope {
+				c.emit(OpLoadGlobal, symbol.Index)
+			} else if symbol.Scope == LocalScope {
+				c.emit(OpCaptureLocal, symbol.Index)
+			} else if symbol.Scope == FreeScope {
+				c.emit(OpLoadUpvalue, symbol.Index)
+			}
+		}
+
+		ptr, err := memory.AllocCompiledFunction(instructions, numLocals, len(node.Parameters))
+		if err != nil {
+			return err
+		}
+
+		compiledFn := &object.CompiledFunction{Address: ptr}
+
+		fnIndex := c.addConstant(compiledFn)
+		c.emit(OpClosure, fnIndex, len(freeSymbols))
+
+	case *parser.ReturnStatement:
+		err := c.Compile(node.ReturnValue)
+		if err != nil {
+			return err
+		}
+		c.emit(OpReturnValue)
+
+	case *parser.CallExpression:
+		err := c.Compile(node.Function)
+		if err != nil {
+			return err
+		}
+
+		for _, a := range node.Arguments {
+			err := c.Compile(a)
+			if err != nil {
+				return err
+			}
+		}
+
+		c.emit(OpCall, len(node.Arguments))
 	}
 
 	return nil
@@ -98,9 +652,35 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 func (c *Compiler) Bytecode() *Bytecode {
 	return &Bytecode{
-		Instructions: c.instructions,
-		Constants:    c.constants,
+		Instructions: c.scopes[0].instructions,
+		Constants:    c.state.Constants,
 	}
+}
+
+func (c *Compiler) currentInstructions() Instructions {
+	return c.scopes[c.scopeIndex].instructions
+}
+
+func (c *Compiler) EnterScope() {
+	scope := CompilationScope{
+		instructions:        Instructions{},
+		lastInstruction:     EmittedInstruction{},
+		previousInstruction: EmittedInstruction{},
+		loopScopes:          []LoopScope{},
+	}
+	c.scopes = append(c.scopes, scope)
+	c.scopeIndex++
+	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
+}
+
+func (c *Compiler) LeaveScope() Instructions {
+	instructions := c.currentInstructions()
+
+	c.scopes = c.scopes[:len(c.scopes)-1]
+	c.scopeIndex--
+	c.symbolTable = c.symbolTable.Outer
+
+	return instructions
 }
 
 type Bytecode struct {
@@ -109,18 +689,168 @@ type Bytecode struct {
 }
 
 func (c *Compiler) addConstant(obj object.Object) int {
-	c.constants = append(c.constants, obj)
-	return len(c.constants) - 1
+	c.state.Constants = append(c.state.Constants, obj)
+	return len(c.state.Constants) - 1
 }
 
 func (c *Compiler) emit(op Opcode, operands ...int) int {
 	ins := Make(op, operands...)
 	pos := c.addInstruction(ins)
+
+	c.setLastInstruction(op, pos)
+
 	return pos
 }
 
 func (c *Compiler) addInstruction(ins []byte) int {
-	posNewInstruction := len(c.instructions)
-	c.instructions = append(c.instructions, ins...)
+	posNewInstruction := len(c.currentInstructions())
+	updatedInstructions := append(c.currentInstructions(), ins...)
+	c.scopes[c.scopeIndex].instructions = updatedInstructions
 	return posNewInstruction
+}
+
+func (c *Compiler) setLastInstruction(op Opcode, pos int) {
+	previous := c.scopes[c.scopeIndex].lastInstruction
+	last := EmittedInstruction{Opcode: op, Position: pos}
+
+	c.scopes[c.scopeIndex].previousInstruction = previous
+	c.scopes[c.scopeIndex].lastInstruction = last
+}
+
+func (c *Compiler) removeLastPop() {
+	last := c.scopes[c.scopeIndex].lastInstruction
+	previous := c.scopes[c.scopeIndex].previousInstruction
+
+	old := c.currentInstructions()
+	if last.Position >= len(old) {
+		return
+	}
+	new := old[:last.Position]
+
+	c.scopes[c.scopeIndex].instructions = new
+	c.scopes[c.scopeIndex].lastInstruction = previous
+}
+
+func (c *Compiler) replaceInstruction(pos int, newInstruction []byte) {
+	ins := c.currentInstructions()
+	for i := 0; i < len(newInstruction); i++ {
+		ins[pos+i] = newInstruction[i]
+	}
+}
+
+func (c *Compiler) changeOperand(opPos int, operand int) {
+	op := Opcode(c.currentInstructions()[opPos])
+	newInstruction := Make(op, operand)
+
+	c.replaceInstruction(opPos, newInstruction)
+}
+
+func (c *Compiler) loadModule(path string) (int, error) {
+	if strings.HasPrefix(path, "cotc/") {
+		path = "lib/" + path
+	}
+
+	// Check Cache
+	if idx, ok := c.state.ModuleCache[path]; ok {
+		return idx, nil
+	}
+
+	// Create Partial Module
+	mod := object.NewModule(path, &object.CompiledFunction{Address: memory.NilPtr})
+	modIdx := c.addConstant(mod)
+	c.state.ModuleCache[path] = modIdx
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("import error: %v", err)
+	}
+
+	l := lexer.New(string(content))
+	p := parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		return 0, fmt.Errorf("import parse error in %s: %v", path, p.Errors())
+	}
+
+	exports := make(map[parser.Expression]parser.Expression)
+	dummyToken := lexer.Token{Type: lexer.STRING, Literal: "dummy"}
+
+	for _, stmt := range prog.Statements {
+		if assign, ok := stmt.(*parser.AssignmentStatement); ok {
+			if ident, ok := assign.Name.(*parser.Identifier); ok {
+				name := ident.Value
+				key := &parser.StringLiteral{Token: dummyToken, Value: name}
+				val := &parser.Identifier{Token: dummyToken, Value: name}
+				exports[key] = val
+			}
+		}
+		if exprStmt, ok := stmt.(*parser.ExpressionStatement); ok {
+			if fn, ok := exprStmt.Expression.(*parser.FunctionLiteral); ok {
+				if fn.Name != "" {
+					name := fn.Name
+					key := &parser.StringLiteral{Token: dummyToken, Value: name}
+					val := &parser.Identifier{Token: dummyToken, Value: name}
+					exports[key] = val
+				}
+			}
+		}
+	}
+
+	retStmt := &parser.ReturnStatement{
+		Token:       lexer.Token{Type: lexer.KEMBALIKAN, Literal: "kembalikan"},
+		ReturnValue: &parser.HashLiteral{Token: lexer.Token{Type: lexer.LBRACE, Literal: "{"}, Pairs: exports},
+	}
+	prog.Statements = append(prog.Statements, retStmt)
+
+	wrapperFn := &parser.FunctionLiteral{
+		Token: lexer.Token{Type: lexer.FUNGSI, Literal: "fungsi"},
+		Body:  &parser.BlockStatement{Statements: prog.Statements},
+	}
+
+	subComp := NewWithState(c.state)
+	err = subComp.Compile(wrapperFn)
+	if err != nil {
+		return 0, fmt.Errorf("import compile error in %s: %v", path, err)
+	}
+
+	bc := subComp.Bytecode()
+	if len(bc.Instructions) < 3 || Opcode(bc.Instructions[0]) != OpClosure {
+		return 0, fmt.Errorf("import wrapper compilation failed struct")
+	}
+
+	wrapperConstIdx := int(ReadUint16(bc.Instructions[1:]))
+	wrapperFnObj := c.state.Constants[wrapperConstIdx]
+	wrapperCompiledFn, ok := wrapperFnObj.(*object.CompiledFunction)
+	if !ok {
+		return 0, fmt.Errorf("import wrapper is not a compiled function")
+	}
+
+	// Update Module Init
+	if err := memory.WriteModuleInit(mod.Address, wrapperCompiledFn.Address); err != nil {
+		return 0, err
+	}
+
+	return modIdx, nil
+}
+
+func (c *Compiler) currentLoopScope() *LoopScope {
+	scopes := c.scopes[c.scopeIndex].loopScopes
+	if len(scopes) == 0 {
+		return nil
+	}
+	return &c.scopes[c.scopeIndex].loopScopes[len(scopes)-1]
+}
+
+func (c *Compiler) enterLoop() {
+	c.scopes[c.scopeIndex].loopScopes = append(c.scopes[c.scopeIndex].loopScopes, LoopScope{
+		BreakPos:    []int{},
+		ContinuePos: []int{},
+	})
+}
+
+func (c *Compiler) leaveLoop() LoopScope {
+	scopes := c.scopes[c.scopeIndex].loopScopes
+	scope := scopes[len(scopes)-1]
+	c.scopes[c.scopeIndex].loopScopes = scopes[:len(scopes)-1]
+	return scope
 }

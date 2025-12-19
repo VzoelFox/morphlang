@@ -127,24 +127,16 @@ func (a *Analyzer) analyzeTopLevel(stmt parser.Statement) {
 		}
 	case *parser.AssignmentStatement:
 		// Global variable
-		name := s.Name.Value
-		inferredType := "unknown"
+		if ident, ok := s.Name.(*parser.Identifier); ok {
+			name := ident.Value
+			inferredType := a.inferType(s.Value)
 
-		// Simple type inference for literals
-		switch s.Value.(type) {
-		case *parser.IntegerLiteral:
-			inferredType = "integer"
-		case *parser.StringLiteral:
-			inferredType = "string"
-		case *parser.BooleanLiteral:
-			inferredType = "boolean"
+			a.context.GlobalVars[name] = &Variable{
+				Line: s.Token.Line,
+				Type: inferredType,
+			}
+			a.defineInCurrentScope(name) // Mark global var
 		}
-
-		a.context.GlobalVars[name] = &Variable{
-			Line: s.Token.Line,
-			Type: inferredType,
-		}
-		a.defineInCurrentScope(name) // Mark global var
 		a.walkExpression(s.Value, func(node parser.Node) {})
 	}
 }
@@ -156,12 +148,14 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 	}
 
 	sym := &Symbol{
-		Type:       "function",
-		Line:       fn.Token.Line,
-		Column:     fn.Token.Column,
-		Parameters: []Parameter{},
-		LocalVars:  []string{},
-		Calls:      []string{},
+		Type:            "function",
+		Line:            fn.Token.Line,
+		Column:          fn.Token.Column,
+		Parameters:      []Parameter{},
+		LocalVars:       []string{},
+		Calls:           []string{},
+		ErrorConditions: []ErrorCond{},
+		Doc:             fn.Doc,
 	}
 
 	for _, p := range fn.Parameters {
@@ -199,7 +193,20 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 				a.context.CallGraph[name] = append(a.context.CallGraph[name], ident.Value)
 			}
 		}
-		// Check for returns galat
+		// Check for error conditions (if ... return galat)
+		if ifExpr, ok := node.(*parser.IfExpression); ok {
+			if containsReturnError(ifExpr.Consequence) {
+				condStr := ifExpr.Condition.String()
+				msg := extractErrorMessage(ifExpr.Consequence)
+				sym.ErrorConditions = append(sym.ErrorConditions, ErrorCond{
+					Condition: condStr,
+					Message:   msg,
+					Line:      ifExpr.Token.Line,
+				})
+				canError = true
+			}
+		}
+		// Check for returns galat (direct)
 		if ret, ok := node.(*parser.ReturnStatement); ok {
 			if ret.ReturnValue != nil {
 				if call, ok := ret.ReturnValue.(*parser.CallExpression); ok {
@@ -213,29 +220,38 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 		}
 		// Local vars logic (Closure Aware)
 		if assign, ok := node.(*parser.AssignmentStatement); ok {
-			varName := assign.Name.Value
+			if ident, ok := assign.Name.(*parser.Identifier); ok {
+				varName := ident.Value
 
-			// Check if variable is defined in any scope up the chain
-			if a.isDefined(varName) {
-				// It's an UPDATE to an existing variable (closure or local update), NOT a new local decl
-				// Do nothing (don't register as new local var)
-			} else {
-				// It's a NEW declaration in this scope
-				a.defineInCurrentScope(varName)
+				// Infer Type
+				inferred := a.inferType(assign.Value)
 
-				// Register in symbol table as Local Var
-				found := false
-				for _, v := range sym.LocalVars {
-					if v == varName {
-						found = true
-						break
+				// Check if variable is defined in any scope up the chain
+				if a.isDefined(varName) {
+					// It's an UPDATE. Check if it's local in CURRENT function scope to update type
+					if v, ok := a.context.LocalScopes[name][varName]; ok {
+						if v.Type == "inferred" || v.Type == "unknown" {
+							v.Type = inferred
+						}
 					}
-				}
-				if !found {
-					sym.LocalVars = append(sym.LocalVars, varName)
-					a.context.LocalScopes[name][varName] = &Variable{
-						Line: assign.Token.Line,
-						Type: "inferred",
+				} else {
+					// It's a NEW declaration in this scope
+					a.defineInCurrentScope(varName)
+
+					// Register in symbol table as Local Var
+					found := false
+					for _, v := range sym.LocalVars {
+						if v == varName {
+							found = true
+							break
+						}
+					}
+					if !found {
+						sym.LocalVars = append(sym.LocalVars, varName)
+						a.context.LocalScopes[name][varName] = &Variable{
+							Line: assign.Token.Line,
+							Type: inferred,
+						}
 					}
 				}
 			}
@@ -284,6 +300,7 @@ func (a *Analyzer) walkStatement(stmt parser.Statement, visitor func(parser.Node
 			a.walkExpression(s.ReturnValue, visitor)
 		}
 	case *parser.AssignmentStatement:
+		a.walkExpression(s.Name, visitor)
 		a.walkExpression(s.Value, visitor)
 	}
 }
@@ -319,4 +336,102 @@ func (a *Analyzer) walkExpression(expr parser.Expression, visitor func(parser.No
 	case *parser.FunctionLiteral:
 		a.analyzeFunction(e)
 	}
+}
+
+func (a *Analyzer) inferType(expr parser.Expression) string {
+	switch e := expr.(type) {
+	case *parser.IntegerLiteral:
+		return "integer"
+	case *parser.FloatLiteral:
+		return "float"
+	case *parser.StringLiteral:
+		return "string"
+	case *parser.BooleanLiteral:
+		return "boolean"
+	case *parser.Identifier:
+		// Check local scope
+		if a.currFunc != "" {
+			if scope, ok := a.context.LocalScopes[a.currFunc]; ok {
+				if v, ok := scope[e.Value]; ok {
+					return v.Type
+				}
+			}
+			// Check params
+			if sym, ok := a.context.Symbols[a.currFunc]; ok {
+				for _, p := range sym.Parameters {
+					if p.Name == e.Value {
+						return p.InferredType
+					}
+				}
+			}
+		}
+		// Check global
+		if v, ok := a.context.GlobalVars[e.Value]; ok {
+			return v.Type
+		}
+		return "unknown"
+	case *parser.CallExpression:
+		if ident, ok := e.Function.(*parser.Identifier); ok {
+			if ident.Value == "galat" {
+				return "error"
+			}
+			if sym, ok := a.context.Symbols[ident.Value]; ok {
+				if sym.Returns != nil && len(sym.Returns.Types) > 0 {
+					if len(sym.Returns.Types) == 1 {
+						return sym.Returns.Types[0]
+					}
+					return "union"
+				}
+			}
+		}
+		return "any"
+	case *parser.InfixExpression:
+		switch e.Operator {
+		case "==", "!=", "<", ">", "<=", ">=":
+			return "boolean"
+		default:
+			return a.inferType(e.Left)
+		}
+	}
+	return "unknown"
+}
+
+func containsReturnError(block *parser.BlockStatement) bool {
+	if block == nil {
+		return false
+	}
+	for _, stmt := range block.Statements {
+		if ret, ok := stmt.(*parser.ReturnStatement); ok {
+			if ret.ReturnValue != nil {
+				if call, ok := ret.ReturnValue.(*parser.CallExpression); ok {
+					if ident, ok := call.Function.(*parser.Identifier); ok {
+						if ident.Value == "galat" {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func extractErrorMessage(block *parser.BlockStatement) string {
+	if block == nil {
+		return ""
+	}
+	for _, stmt := range block.Statements {
+		if ret, ok := stmt.(*parser.ReturnStatement); ok {
+			if ret.ReturnValue != nil {
+				if call, ok := ret.ReturnValue.(*parser.CallExpression); ok {
+					if len(call.Arguments) > 0 {
+						if str, ok := call.Arguments[0].(*parser.StringLiteral); ok {
+							return str.Value
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
 }

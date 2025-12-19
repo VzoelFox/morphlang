@@ -2,9 +2,9 @@
 
 ```markdown
 # Morph Language - AI Agent Protocol
-**Version:** 1.0.1
+**Version:** 1.0.2
 **Status:** LOCKED - Single Source of Truth  
-**Last Updated:** 2025-01-15
+**Last Updated:** 2025-12-19
 
 ---
 
@@ -253,6 +253,31 @@ Error [E001] Syntax Error [kalkulator.fox:5:10]:
   
 Hint: Binary operators require spaces: a + b
 ```
+
+---
+
+## Module System Protocol
+
+### Import Behavior
+
+**Morph uses a Runtime Module System with Caching.**
+
+1. **Syntax:** `mod = ambil "path/to/file"`
+2. **Resolution:**
+   - Relative paths are relative to the CWD.
+   - `.fox` extension is optional.
+3. **Caching:**
+   - Modules are cached by resolved path.
+   - Subsequent imports return the cached Module object.
+4. **Circular Imports:**
+   - **Supported.**
+   - If `A` imports `B`, and `B` imports `A`:
+     - `A` starts loading.
+     - `B` starts loading.
+     - `B` imports `A`. Since `A` is loading, it returns `kosong` (Null).
+     - `B` continues execution.
+     - `A` resumes after `B` returns.
+   - **Agent Responsibility:** Agents must handle potential `kosong` return from `ambil` if circularity is possible.
 
 ---
 
@@ -941,264 +966,39 @@ Catatan:
 
 ### Problem: AI has no memory between sessions
 
-**Solution: Conversation State File**
+**Solution: Blockchain Interaction Log**
 
-### Format: `.morph.session`
+### Format: `.vzoel.jules`
+
+**Description:**
+A chronological, append-only, tamper-evident log of all user-agent interactions. This file serves as the "Long Term Memory" for the agent.
+
+**Schema:**
+Array of `Interaction` objects.
 
 ```json
-{
-  "session_id": "uuid-1234-5678-90ab",
-  "started": "2025-01-15T10:00:00Z",
-  "last_active": "2025-01-15T10:30:00Z",
-  "version": "1.0.0",
-  
-  "project": {
-    "name": "Kalkulator App",
-    "root_dir": "/path/to/project",
-    "main_file": "kalkulator.fox"
-  },
-  
-  "files": [
-    {
-      "path": "kalkulator.fox",
-      "checksum": "sha256:abc123...",
-      "last_modified": "2025-01-15T10:25:00Z",
-      "context_file": "kalkulator.fox.vz"
-    },
-    {
-      "path": "utils.fox",
-      "checksum": "sha256:def456...",
-      "last_modified": "2025-01-15T10:20:00Z",
-      "context_file": "utils.fox.vz"
-    }
-  ],
-  
-  "conversation_history": [
-    {
-      "id": 1,
-      "timestamp": "2025-01-15T10:01:00Z",
-      "user": "Buat fungsi untuk membagi dua angka",
-      "assistant": "Saya buat fungsi bagi() di kalkulator.fox",
-      "confidence": 0.95,
-      "changes": {
-        "file": "kalkulator.fox",
-        "type": "function_added",
-        "details": {
-          "function_name": "bagi",
-          "lines_added": 7,
-          "line_start": 2,
-          "line_end": 8
-        }
-      },
-      "code_generated": "fungsi bagi(a, b)\n  jika b == 0\n    kembalikan galat(\"Pembagian dengan nol\")\n  akhir\n  kembalikan a / b\nakhir"
-    },
-    {
-      "id": 2,
-      "timestamp": "2025-01-15T10:05:00Z",
-      "user": "Tambahkan error handling untuk division by zero",
-      "assistant": "Error handling sudah ada. Fungsi bagi() mengembalikan galat() jika b=0",
-      "confidence": 1.0,
-      "changes": {
-        "type": "no_change",
-        "reason": "Feature already implemented"
-      }
-    },
-    {
-      "id": 3,
-      "timestamp": "2025-01-15T10:10:00Z",
-      "user": "Buat fungsi utama untuk test",
-      "assistant": "Saya buat fungsi utama() dengan test case",
-      "confidence": 0.9,
-      "changes": {
-        "file": "kalkulator.fox",
-        "type": "function_added",
-        "details": {
-          "function_name": "utama",
-          "lines_added": 8,
-          "line_start": 10,
-          "line_end": 17
-        }
-      },
-      "warnings_generated": [
-        {
-          "code": "W001",
-          "message": "Function bagi() dapat return error tapi tidak dicek di line 13"
-        }
-      ]
-    }
-  ],
-  
-  "known_symbols": {
-    "kalkulator.fox": {
-      "functions": ["bagi", "utama"],
-      "variables": [],
-      "imports": []
-    },
-    "utils.fox": {
-      "functions": ["helper"],
-      "variables": [],
-      "imports": []
-    }
-  },
-  
-  "user_preferences": {
-    "verbose_errors": true,
-    "auto_error_check": true,
-    "style": "verbose",
-    "confidence_threshold": 0.7,
-    "ask_before_major_changes": true
-  },
-  
-  "pending_tasks": [
-    {
-      "id": 1,
-      "description": "Fix warning W001 di fungsi utama",
-      "priority": "high",
-      "file": "kalkulator.fox",
-      "line": 13
-    },
-    {
-      "id": 2,
-      "description": "Tambahkan fungsi perkalian",
-      "priority": "medium",
-      "file": "kalkulator.fox"
-    }
-  ],
-  
-  "statistics": {
-    "total_interactions": 3,
-    "code_generated_lines": 15,
-    "functions_created": 2,
-    "errors_fixed": 0,
-    "warnings_generated": 1
+[
+  {
+    "index": 0,
+    "timestamp": "2025-12-19T10:00:00Z",
+    "user": "User instruction or prompt",
+    "assistant": "Agent response and actions taken",
+    "context_hash": "sha256:...", // Optional: Snapshot of project state
+    "prev_hash": "00000000...",   // Hash of previous interaction (Genesis: empty)
+    "hash": "abcdef12..."         // SHA256(index + timestamp + user + assistant + context_hash + prev_hash)
   }
-}
+]
 ```
 
-### Session Management
+### Integrity Verification
 
-**When AI agent starts conversation:**
+The `hash` field ensures the integrity of the conversation history.
+`Hash[N] = SHA256(Index[N] + Timestamp[N] + User[N] + Assistant[N] + ContextHash[N] + Hash[N-1])`
 
-```python
-def start_agent_session(project_dir):
-    """
-    Initialize or resume agent session.
-    """
-    session_file = os.path.join(project_dir, ".morph.session")
-    
-    if os.path.exists(session_file):
-        # Resume existing session
-        session = load_session(session_file)
-        
-        print(f"📂 Melanjutkan sesi dari {session['last_active']}")
-        print(f"📝 File dalam project: {len(session['files'])}")
-        
-        # Show recent activity
-        recent = session['conversation_history'][-3:]
-        print("\n🕐 Aktivitas terakhir:")
-        for item in recent:
-            print(f"  - {item['user'][:50]}...")
-        
-        # Show pending tasks
-        if session['pending_tasks']:
-            print(f"\n✓ Task pending: {len(session['pending_tasks'])}")
-            for task in session['pending_tasks'][:3]:
-                print(f"  - {task['description']}")
-        
-        # Load all context files
-        contexts = {}
-        for file_info in session['files']:
-            ctx_path = file_info['context_file']
-            if os.path.exists(ctx_path):
-                contexts[file_info['path']] = load_context(ctx_path)
-        
-        return session, contexts
-    
-    else:
-        # Create new session
-        session = create_new_session(project_dir)
-        print("🆕 Memulai sesi baru")
-        return session, {}
-
-def update_session_after_interaction(session, user_input, assistant_output, changes, confidence):
-    """
-    Update session after each AI interaction.
-    """
-    interaction = {
-        "id": len(session['conversation_history']) + 1,
-        "timestamp": datetime.now().isoformat(),
-        "user": user_input,
-        "assistant": assistant_output,
-        "confidence": confidence,
-        "changes": changes
-    }
-    
-    session['conversation_history'].append(interaction)
-    session['last_active'] = datetime.now().isoformat()
-    session['statistics']['total_interactions'] += 1
-    
-    # Update file checksums if modified
-    if changes.get('file'):
-        update_file_checksum(session, changes['file'])
-    
-    save_session(session)
-```
-
----
-
-### Context Restoration
-
-**When resuming session, AI agent MUST:**
-
-1. **Load all context files**
-   ```python
-   def restore_context(session):
-       contexts = {}
-       for file_info in session['files']:
-           ctx = load_context(file_info['context_file'])
-           contexts[file_info['path']] = ctx
-       return contexts
-   ```
-
-2. **Rebuild symbol table**
-   ```python
-   def rebuild_symbol_table(contexts):
-       all_symbols = {}
-       for file_path, context in contexts.items():
-           all_symbols[file_path] = context['symbols']
-       return all_symbols
-   ```
-
-3. **Check for file modifications**
-   ```python
-   def check_file_modifications(session):
-       modified = []
-       for file_info in session['files']:
-           current_checksum = calculate_checksum(file_info['path'])
-           if current_checksum != file_info['checksum']:
-               modified.append(file_info['path'])
-       
-       if modified:
-           print(f"⚠️  File berubah sejak sesi terakhir: {', '.join(modified)}")
-           print("   Recompiling untuk update context...")
-           
-           for file_path in modified:
-               recompile_and_update_context(file_path)
-   ```
-
-4. **Resume pending tasks**
-   ```python
-   def show_pending_tasks(session):
-       if not session['pending_tasks']:
-           return
-       
-       print("\n📋 Task yang pending:")
-       for task in session['pending_tasks']:
-           priority_icon = "🔴" if task['priority'] == 'high' else "🟡"
-           print(f"  {priority_icon} {task['description']}")
-           if task.get('file'):
-               print(f"     File: {task['file']}, Line: {task.get('line', 'N/A')}")
-   ```
+**Agent Responsibility:**
+1.  **Read:** Load `.vzoel.jules` at start of session.
+2.  **Verify:** Validate the hash chain to ensure history hasn't been tampered with.
+3.  **Append:** When completing a task, append a new `Interaction` entry with correctly calculated `prev_hash` and `hash`.
 
 ---
 
@@ -1362,7 +1162,7 @@ Hint: Tambahkan pengecekan:
 
 **Context Loading:**
 - [ ] Load `.fox.vz` file untuk semua file terkait
-- [ ] Load `.morph.session` jika ada (resume state)
+- [ ] Load `.vzoel.jules` jika ada (resume state)
 - [ ] Verify checksums (check if files modified)
 - [ ] Rebuild symbol table dari context
 
@@ -1427,7 +1227,7 @@ Hint: Tambahkan pengecekan:
 - [ ] Update conversation history
 - [ ] Update file checksums
 - [ ] Update symbol table
-- [ ] Save session file
+- [ ] Append interaction to `.vzoel.jules`
 
 **User Communication:**
 - [ ] Provide clear explanation of changes
@@ -1638,7 +1438,7 @@ Confidence: LOW - fungsi logging belum ada"
 
 **Limit session history:**
 - Keep last 100 interactions
-- Archive older interactions to `.morph.session.archive`
+- Archive older interactions to `.vzoel.jules.archive`
 - Prune redundant interactions (e.g., multiple failed attempts)
 
 ### Symbol Table Optimization

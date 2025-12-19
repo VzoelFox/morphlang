@@ -1,0 +1,33 @@
+fungsi kerja_berat()
+    cetak("Background thread mulai...")
+    # Simulasi kerja
+    x = 10 + 20
+    cetak("Background thread selesai.")
+    kembalikan x
+akhir
+
+cetak("Main thread mulai.")
+t = luncurkan(kerja_berat)
+cetak("Tipe t: " + tipe(t))
+cetak("Main thread menunggu hasil dari background thread...")
+
+hasil = gabung(t)
+
+cetak("Main thread menerima hasil:")
+cetak(hasil)
+
+jika hasil == 30
+    cetak("Tes SUKSES.")
+lainnya
+    cetak("Tes GAGAL: Hasil tidak sesuai.")
+akhir
+
+# Verify old gabung still works
+arr = ["a", "b", "c"]
+joined = gabung(arr, "-")
+cetak("Gabung string result: " + joined)
+jika joined == "a-b-c"
+    cetak("Tes Overloading SUKSES.")
+lainnya
+    cetak("Tes Overloading GAGAL.")
+akhir

@@ -95,7 +95,9 @@ func (l *Lexer) peekChar() byte {
 
 func (l *Lexer) NextToken() Token {
 	if l.currentState() == STATE_STRING {
-		return l.readStringToken()
+		// Continuation of string (e.g. after interpolation) usually has no leading space
+		// relative to the code stream, as it is inside quotes.
+		return l.readStringToken(false)
 	}
 	return l.readCodeToken()
 }
@@ -137,12 +139,25 @@ func (l *Lexer) readCodeToken() Token {
 		tok = newToken(SLASH, l.ch)
 	case '*':
 		tok = newToken(ASTERISK, l.ch)
+	case '&':
+		tok = newToken(AND, l.ch)
+	case '|':
+		tok = newToken(OR, l.ch)
+	case '^':
+		tok = newToken(XOR, l.ch)
+	case '~':
+		tok = newToken(TILDE, l.ch)
 	case '<':
 		if l.peekChar() == '=' {
 			ch := l.ch
 			l.readChar()
 			literal := string(ch) + string(l.ch)
 			tok = Token{Type: LTE, Literal: literal}
+		} else if l.peekChar() == '<' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: LSHIFT, Literal: literal}
 		} else {
 			tok = newToken(LT, l.ch)
 		}
@@ -152,6 +167,11 @@ func (l *Lexer) readCodeToken() Token {
 			l.readChar()
 			literal := string(ch) + string(l.ch)
 			tok = Token{Type: GTE, Literal: literal}
+		} else if l.peekChar() == '>' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: RSHIFT, Literal: literal}
 		} else {
 			tok = newToken(GT, l.ch)
 		}
@@ -182,16 +202,40 @@ func (l *Lexer) readCodeToken() Token {
 		tok = newToken(LBRACKET, l.ch)
 	case ']':
 		tok = newToken(RBRACKET, l.ch)
+	case '#':
+		tok = Token{Type: COMMENT, Literal: l.readComment(), Line: tokLine, Column: tokCol, HasLeadingSpace: hasLeadingSpace}
+		return tok
 	case '"':
 		// Optimization for empty string
 		if l.peekChar() == '"' {
-			tok = Token{Type: STRING, Literal: "", Line: tokLine, Column: tokCol}
+			tok = Token{Type: STRING, Literal: "", Line: tokLine, Column: tokCol, HasLeadingSpace: hasLeadingSpace}
 			l.readChar() // consume opening "
-			// consume closing " happens at end of function
+			// consume closing " happens at end of function if logic flowed there, but here we return early?
+			// Wait, previous logic was: l.readChar(); return ...
+			// But readStringToken expects to read content.
+			// Let's keep logic simple: push state, delegate to readStringToken.
+			// Optimizations might be tricky with HasLeadingSpace.
+			// Let's remove optimization for clarity/safety or fix it.
+			// If empty string: ""
+			l.readChar() // eat opening "
+			// check closing
+			if l.ch == '"' {
+				tok = Token{Type: STRING, Literal: "", Line: tokLine, Column: tokCol, HasLeadingSpace: hasLeadingSpace}
+				l.readChar() // eat closing "
+				return tok
+			}
+			// Not empty immediately (or logic above was just optimization).
+			// Let's stick to standard path.
+			// Rewind? No.
+			// Just use readStringToken logic.
+			l.pushState(STATE_STRING)
+			// l.readChar() was done (consumed opening ").
+			// But readStringToken expects to start reading content.
+			return l.readStringToken(hasLeadingSpace)
 		} else {
 			l.pushState(STATE_STRING)
 			l.readChar() // consume opening "
-			return l.readStringToken()
+			return l.readStringToken(hasLeadingSpace)
 		}
 	case 0:
 		tok.Literal = ""
@@ -205,8 +249,7 @@ func (l *Lexer) readCodeToken() Token {
 			tok.HasLeadingSpace = hasLeadingSpace
 			return tok
 		} else if isDigit(l.ch) {
-			tok.Literal = l.readNumber()
-			tok.Type = INT
+			tok.Literal, tok.Type = l.readNumber()
 			tok.Line = tokLine
 			tok.Column = tokCol
 			tok.HasLeadingSpace = hasLeadingSpace
@@ -224,7 +267,7 @@ func (l *Lexer) readCodeToken() Token {
 	return tok
 }
 
-func (l *Lexer) readStringToken() Token {
+func (l *Lexer) readStringToken(hasLeadingSpace bool) Token {
 	tokLine := l.line
 	tokCol := l.column
 
@@ -236,14 +279,21 @@ func (l *Lexer) readStringToken() Token {
 
 	if l.ch == '#' && l.peekChar() == '{' {
 		l.pushState(STATE_CODE)
-		tok := Token{Type: INTERP_START, Literal: "#{", Line: tokLine, Column: tokCol}
+		// Interpolation start. Does it have leading space? No, inside string.
+		tok := Token{Type: INTERP_START, Literal: "#{", Line: tokLine, Column: tokCol, HasLeadingSpace: false}
 		l.readChar() // consume #
 		l.readChar() // consume {
 		return tok
 	}
 
 	content := l.readStringContent()
-	return Token{Type: STRING, Literal: content, Line: tokLine, Column: tokCol}
+	return Token{
+		Type:            STRING,
+		Literal:         content,
+		Line:            tokLine,
+		Column:          tokCol,
+		HasLeadingSpace: hasLeadingSpace,
+	}
 }
 
 func newToken(tokenType TokenType, ch byte) Token {
@@ -262,12 +312,21 @@ func isLetter(ch byte) bool {
 	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
 }
 
-func (l *Lexer) readNumber() string {
+func (l *Lexer) readNumber() (string, TokenType) {
 	position := l.position
 	for isDigit(l.ch) {
 		l.readChar()
 	}
-	return l.input[position:l.position]
+
+	if l.ch == '.' && isDigit(l.peekChar()) {
+		l.readChar() // consume dot
+		for isDigit(l.ch) {
+			l.readChar()
+		}
+		return l.input[position:l.position], FLOAT
+	}
+
+	return l.input[position:l.position], INT
 }
 
 func isDigit(ch byte) bool {
@@ -309,12 +368,7 @@ func (l *Lexer) readStringContent() string {
 }
 
 func (l *Lexer) skipWhitespace() {
-	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' || l.ch == '#' {
-		if l.ch == '#' {
-			l.skipComment()
-			continue
-		}
-
+	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
 		if l.ch == '\n' {
 			l.line += 1
 			l.column = 0
@@ -323,8 +377,14 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-func (l *Lexer) skipComment() {
+func (l *Lexer) readComment() string {
+	l.readChar() // consume '#'
+	if l.ch == ' ' {
+		l.readChar()
+	}
+	position := l.position
 	for l.ch != '\n' && l.ch != 0 {
 		l.readChar()
 	}
+	return l.input[position:l.position]
 }

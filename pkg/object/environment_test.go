@@ -4,7 +4,7 @@ import "testing"
 
 func TestEnvironmentBasic(t *testing.T) {
 	env := NewEnvironment()
-	val := &Integer{Value: 10}
+	val := NewInteger(10)
 
 	env.Set("x", val)
 
@@ -24,7 +24,7 @@ func TestEnvironmentBasic(t *testing.T) {
 
 func TestEnvironmentEnclosed(t *testing.T) {
 	outer := NewEnvironment()
-	outerVal := &Integer{Value: 5}
+	outerVal := NewInteger(5)
 	outer.Set("outer", outerVal)
 
 	inner := NewEnclosedEnvironment(outer)
@@ -41,11 +41,11 @@ func TestEnvironmentEnclosed(t *testing.T) {
 
 func TestEnvironmentClosureUpdate(t *testing.T) {
 	outer := NewEnvironment()
-	val1 := &Integer{Value: 1}
+	val1 := NewInteger(1)
 	outer.Set("x", val1)
 
 	inner := NewEnclosedEnvironment(outer)
-	val2 := &Integer{Value: 2}
+	val2 := NewInteger(2)
 	inner.Set("x", val2) // Updates outer x (Closure semantics)
 
 	// Inner should see val2
@@ -53,7 +53,7 @@ func TestEnvironmentClosureUpdate(t *testing.T) {
 	if !ok {
 		t.Fatalf("inner.Get('x') failed")
 	}
-	if got.(*Integer).Value != 2 {
+	if got.(*Integer).GetValue() != 2 {
 		t.Errorf("inner.Get('x') should be 2, got %s", got.Inspect())
 	}
 
@@ -62,20 +62,20 @@ func TestEnvironmentClosureUpdate(t *testing.T) {
 	if !ok {
 		t.Fatalf("outer.Get('x') failed")
 	}
-	if gotOuter.(*Integer).Value != 2 {
+	if gotOuter.(*Integer).GetValue() != 2 {
 		t.Errorf("outer.Get('x') should be 2 (updated), got %s", gotOuter.Inspect())
 	}
 }
 
 func TestEnvironmentDeepNesting(t *testing.T) {
 	global := NewEnvironment()
-	global.Set("g", &Integer{Value: 100})
+	global.Set("g", NewInteger(100))
 
 	middle := NewEnclosedEnvironment(global)
-	middle.Set("m", &Integer{Value: 50})
+	middle.Set("m", NewInteger(50))
 
 	local := NewEnclosedEnvironment(middle)
-	local.Set("l", &Integer{Value: 10})
+	local.Set("l", NewInteger(10))
 
 	// Local should see all
 	if _, ok := local.Get("g"); !ok {

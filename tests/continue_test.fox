@@ -1,0 +1,9 @@
+i = 0
+selama i < 5
+  i = i + 1
+  jika i == 3
+    lanjut
+  akhir
+  cetak(i)
+akhir
+cetak("Done Continue")

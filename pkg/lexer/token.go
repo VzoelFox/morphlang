@@ -19,6 +19,7 @@ const (
 	// Identifiers + Literals
 	IDENT  = "IDENT"  // add, foobar, x, y
 	INT    = "INT"    // 1343456
+	FLOAT  = "FLOAT"  // 123.45
 	STRING = "STRING" // "foobar"
 
 	// Operators
@@ -35,6 +36,14 @@ const (
 	NOT_EQ = "!="
 	LTE    = "<="
 	GTE    = ">="
+
+	// Bitwise Operators
+	AND    = "&"
+	OR     = "|"
+	XOR    = "^"
+	TILDE  = "~" // Bitwise NOT
+	LSHIFT = "<<"
+	RSHIFT = ">>"
 
 	// Delimiters
 	COMMA     = ","
@@ -63,9 +72,18 @@ const (
 	KOSONG     = "KOSONG"
 	AKHIR      = "AKHIR"
 	SELAMA     = "SELAMA"
+	DAN        = "DAN"
+	ATAU       = "ATAU"
+	AMBIL      = "AMBIL"
+	DARI       = "DARI"
+	BERHENTI   = "BERHENTI"
+	LANJUT     = "LANJUT"
+	STRUKTUR   = "STRUKTUR"
+	COMMENT    = "COMMENT"
 )
 
 var keywords = map[string]TokenType{
+	"struktur":   STRUKTUR,
 	"fungsi":     FUNGSI,
 	"jika":       JIKA,
 	"atau_jika":  ATAU_JIKA,
@@ -76,6 +94,12 @@ var keywords = map[string]TokenType{
 	"kosong":     KOSONG,
 	"akhir":      AKHIR,
 	"selama":     SELAMA,
+	"dan":        DAN,
+	"atau":       ATAU,
+	"ambil":      AMBIL,
+	"dari":       DARI,
+	"berhenti":   BERHENTI,
+	"lanjut":     LANJUT,
 }
 
 // LookupIdent checks if an identifier is a keyword (case-insensitive)

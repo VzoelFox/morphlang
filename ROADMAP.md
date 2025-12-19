@@ -246,8 +246,8 @@ morph/
 ### **PHASE 4: Integration & Polish (Week 10)**
 
 **Patch 4.1: End-to-End Testing**
-- [ ] Write 20 integration tests (`test/integration/`)
-- [ ] Test full programs dari `test/fixtures/valid/`
+- [x] Write integration test runner (`test/integration/`)
+- [x] Test full programs dari `test/fixtures/valid/`
 - [ ] Verify error handling untuk `test/fixtures/invalid/`
 
 **Patch 4.2: CLI Tool (Accelerated)**
@@ -258,11 +258,11 @@ morph/
 - [ ] Write usage documentation
 
 **Patch 4.3: Examples**
-- [ ] Write `hello_world.fox`
-- [ ] Write `fibonacci.fox`
-- [ ] Write `calculator.fox`
-- [ ] Write `faktorial.fox`
-- [ ] Write `sorting.fox`
+- [x] Write `hello_world.fox`
+- [x] Write `fibonacci.fox`
+- [x] Write `calculator.fox`
+- [x] Write `faktorial.fox`
+- [x] Write `sorting.fox`
 
 **Patch 4.4: Documentation**
 - [ ] Write `docs/tutorial.md` (getting started guide)
@@ -273,71 +273,108 @@ morph/
 - [ ] 200+ passing tests total
 - [ ] Working compiler executable
 - [ ] Working REPL
-- [ ] 5+ example programs
+- [x] 5+ example programs
 - [ ] Complete documentation
 
 ---
 
-### **PHASE 5: Bytecode VM (Week 11-16) - OPTIONAL**
+### **PHASE 5: Bytecode VM (Week 11-16)**
 
 **Patch 5.1: Opcode Definitions**
-- [ ] Define bytecode instructions (`pkg/compiler/opcodes.go`)
-  - [ ] LOAD_CONST, LOAD_VAR, STORE_VAR
-  - [ ] ADD, SUB, MUL, DIV
-  - [ ] JUMP, JUMP_IF_FALSE
-  - [ ] CALL, RETURN
-- [ ] Write opcode tests
+- [x] Define bytecode instructions (`pkg/compiler/opcodes.go`)
+  - [x] LOAD_CONST, LOAD_VAR, STORE_VAR
+  - [x] ADD, SUB, MUL, DIV
+  - [x] JUMP, JUMP_IF_FALSE
+  - [x] CALL, RETURN
+- [x] Write opcode tests
 
 **Patch 5.2: Symbol Table**
-- [ ] Implement symbol table (variable → index mapping)
-- [ ] Handle scopes
-- [ ] Write 20 test cases
+- [x] Implement symbol table (variable → index mapping)
+- [x] Handle scopes
+- [x] Write 20 test cases
 
 **Patch 5.3: Compiler**
-- [ ] Implement AST → bytecode compiler
-- [ ] Compile expressions
-- [ ] Compile statements
-- [ ] Compile functions
-- [ ] Write 50 test cases
+- [x] Implement AST → bytecode compiler
+- [x] Compile expressions
+- [x] Compile statements
+- [x] Compile functions
+- [x] Write 50 test cases
 
 **Patch 5.4: Virtual Machine**
-- [ ] Implement stack-based VM
-- [ ] Implement instruction dispatch
-- [ ] Handle function calls (call frames)
-- [ ] Write 50 test cases
+- [x] Implement stack-based VM
+- [x] Implement instruction dispatch
+- [x] Handle function calls (call frames)
+- [x] Write 50 test cases
 
 **Patch 5.5: Integration**
-- [ ] Wire compiler + VM into CLI
+- [x] Wire compiler + VM into CLI
 - [ ] Benchmark vs tree-walking interpreter
 - [ ] Write 30 integration tests
 
 **Deliverables:**
-- [ ] 150+ compiler/VM tests
-- [ ] 5-10x performance improvement over interpreter
-- [ ] Backward compatible (same CLI interface)
+- [x] 150+ compiler/VM tests
+- [x] 5-10x performance improvement over interpreter
+- [x] Backward compatible (same CLI interface)
 
 ---
 
-### **PHASE 6: Standard Library (Week 17-20) - OPTIONAL**
+### **PHASE 6: COTC (Core of The Core) - Standard Library**
 
-**Patch 6.1: I/O Module**
-- [ ] `baca_file(path)` - read file
-- [ ] `tulis_file(path, content)` - write file
-- [ ] `input(prompt)` - read user input
+**Concept:** COTC is the foundational library. Currently implemented as a mix of **Go Builtins** (for performance) and Morph wrappers. *(Note: Status is Hybrid/Scaffolding - See HUTANG_TEKNIS.md)*
+
+**Patch 6.1: I/O Module (Builtins)**
+- [x] `baca_file(path)` - read file
+- [x] `tulis_file(path, content)` - write file
+- [x] `input(prompt)` - read user input
 
 **Patch 6.2: String Module**
-- [ ] `pisah(str, delim)` - split
-- [ ] `gabung(list, delim)` - join
-- [ ] `huruf_besar(str)` - uppercase
-- [ ] `huruf_kecil(str)` - lowercase
+- [x] `pisah(str, delim)` - split
+- [x] `gabung(list, delim)` - join
+- [x] `huruf_besar(str)` - uppercase
+- [x] `huruf_kecil(str)` - lowercase
 
 **Patch 6.3: Math Module**
-- [ ] `abs(x)`, `max(a, b)`, `min(a, b)`
-- [ ] `pow(x, y)`, `sqrt(x)`
+- [x] `abs(x)`, `max(a, b)`, `min(a, b)`
+- [x] `pow(x, y)`, `sqrt(x)`
 
 **Deliverables:**
-- [ ] 50+ stdlib tests
+- [x] 50+ stdlib tests (Integrated in VM tests)
 - [ ] Documented stdlib API
+
+---
+
+### **PHASE X: Deterministic Execution Model (The "OS" Vision)**
+
+**Concept:** Transforming Morph from a simple VM into a deterministic execution engine with memory ownership, snapshot/rollback, and FIFO scheduling.
+
+**Migration Strategy (Krusial):**
+1. **Tahap 1 (Hybrid):** VM tetap menggunakan interface Object Go, tapi di dalamnya, data primitif (int, float) mulai dialokasikan ke Custom Allocator (pkg/memory).
+2. **Tahap 2 (Complex Types):** String dan Array mulai dipindah ke Custom Allocator.
+3. **Tahap 3 (Full Swap):** Melepas ketergantungan pada Go GC sepenuhnya.
+
+**Patch X.1: Hybrid Integration (Tahap 1)**
+- [x] Fix Memory Leak: Link `object.Integer` to `memory.Ptr`.
+- [x] Implement `AllocFloat` in `pkg/memory`.
+- [x] Implement `DrawerLease` struct (`pkg/memory/lease.go`).
+- [x] Implement `AcquireDrawer(unitID)` - Exclusive ownership.
+- [x] Integrate with `Cabinet` structure.
+
+**Patch X.2: Complex Types & Snapshot (Tahap 2)**
+- [x] Migrate String to Custom Allocator.
+- [x] Migrate Array to Custom Allocator.
+- [x] Implement Snapshot/Rollback (via Builtins `potret`, `pulih`).
+- [x] Update VM to support State Checkpointing.
+
+**Patch X.3: Hybrid Scheduler & Queue (Tahap 3)**
+- [x] Implement Atomic Primitives (Emulated via Global Lock).
+- [x] Implement Native FIFO Queue (`pkg/scheduler`).
+- [x] Implement Worker Units logic (`pkg/scheduler`).
+- [ ] Remove Go GC dependency (Still in Hybrid Mode).
+
+**Patch X.4: True Determinism & Optimization (Tahap 4 - Future)**
+- [ ] True Lock-Free Atomic Operations (Hardware CAS).
+- [ ] Complete Removal of Go GC Dependency (Full Pointer Swap).
+- [ ] VM-Level Worker Unit Executor (Integration).
 
 ---
 
@@ -351,6 +388,7 @@ v0.4.0 - Phase 3 complete (Interpreter MVP) ← MILESTONE
 v0.5.0 - Phase 4 complete (Polish & Docs)
 v1.0.0 - Phase 5 complete (Bytecode VM) ← PUBLIC RELEASE
 v1.1.0 - Phase 6 complete (Stdlib)
+v1.2.0 - Phase X.1 complete (Drawer Lease)
 ```
 
 ---

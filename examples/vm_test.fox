@@ -1,0 +1,4 @@
+cetak("Hello from VM!")
+x = 10
+y = 20
+cetak(x + y)

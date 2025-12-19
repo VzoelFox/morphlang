@@ -1,0 +1,22 @@
+# Runtime Error Propagation Test
+
+# 1. Type Mismatch (Should not crash VM, but propagate error)
+a = "hello" - 5
+jika adalah_galat(a)
+  cetak("Caught Type Mismatch: " + pesan_galat(a))
+lainnya
+  cetak("Failed to catch Type Mismatch")
+akhir
+
+# 2. Division by Zero (VM logic)
+b = 10 / 0
+jika adalah_galat(b)
+  cetak("Caught DivByZero: " + pesan_galat(b))
+akhir
+
+# 3. Propagated Error
+err = galat("Original Error")
+c = err + 5
+jika adalah_galat(c)
+  cetak("Caught Propagated: " + pesan_galat(c))
+akhir
