@@ -7,7 +7,7 @@ import (
 // Offsets for Array Layout [Header(8)][Cap(4)][Len(4)][Elem0(8)][Elem1(8)]...
 // We assume standard layout from pkg/memory/array.go
 const (
-	ArrayDataOffset = 16
+	ArrayDataOffset = 24 // Header(16) + Cap(4) + Len(4)
 	PtrSize         = 8
 )
 

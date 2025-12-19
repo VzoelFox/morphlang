@@ -26,6 +26,8 @@ var (
 	schedulerOnce sync.Once
 	taskRegistry  sync.Map
 	taskIDGen     int64
+	activeVMs     sync.Map
+	GlobalVMLock  sync.RWMutex
 )
 
 type TaskContext struct {
@@ -94,6 +96,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 		if FalsePtr == 0 {
 			FalsePtr = False.Address
 		}
+		memory.Lemari.RootProvider = GlobalRootProvider
 	})
 
 	schedulerOnce.Do(func() {
@@ -102,7 +105,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 	drawer := &memory.Lemari.Drawers[0]
 
-	return &VM{
+	vm := &VM{
 		constants:   bytecode.Constants,
 		globals:     make([]memory.Ptr, GlobalSize),
 		stack:       [StackSize]memory.Ptr{},
@@ -113,6 +116,8 @@ func New(bytecode *compiler.Bytecode) *VM {
 		Cabinet:     &memory.Lemari,
 		Drawer:      drawer,
 	}
+	activeVMs.Store(vm, true)
+	return vm
 }
 
 func (vm *VM) currentFrame() *Frame {
@@ -160,6 +165,9 @@ func (vm *VM) Run() (err error) {
 			err = fmt.Errorf("VM CRASH: %v", r)
 		}
 	}()
+
+	GlobalVMLock.RLock()
+	defer GlobalVMLock.RUnlock()
 
 	var ip int
 	var ins compiler.Instructions
@@ -232,13 +240,21 @@ func (vm *VM) Run() (err error) {
 			returnValue, err := vm.pop()
 			if err != nil { return err }
 			frame := vm.popFrame()
-			vm.sp = frame.basePointer - 1
+			if vm.framesIndex == 0 {
+				vm.sp = 0
+			} else {
+				vm.sp = frame.basePointer - 1
+			}
 			if err := vm.push(returnValue); err != nil { return err }
 			if vm.framesIndex == 0 { return nil }
 
 		case compiler.OpReturn:
 			frame := vm.popFrame()
-			vm.sp = frame.basePointer - 1
+			if vm.framesIndex == 0 {
+				vm.sp = 0
+			} else {
+				vm.sp = frame.basePointer - 1
+			}
 			if err := vm.push(NullPtr); err != nil { return err }
 			if vm.framesIndex == 0 { return nil }
 
@@ -306,6 +322,8 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpJump:
 			pos := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip = pos - 1
+			GlobalVMLock.RUnlock()
+			GlobalVMLock.RLock()
 
 		case compiler.OpJumpNotTruthy:
 			pos := int(compiler.ReadUint16(ins[ip+1:]))
@@ -457,13 +475,16 @@ func executeTask(ptr memory.Ptr) {
 		framesIndex: 1,
 		Cabinet: &memory.Lemari,
 	}
+	activeVMs.Store(newVM, true)
+	defer activeVMs.Delete(newVM)
 
 	err := newVM.Run()
 	if err != nil {
 		ctx.ResultCh <- object.NewError(err.Error(), "", 0, 0)
 	} else {
-		if newVM.LastPoppedStackElem != nil {
-			ctx.ResultCh <- newVM.LastPoppedStackElem
+		val := newVM.StackTop()
+		if val != nil {
+			ctx.ResultCh <- val
 		} else {
 			ctx.ResultCh <- Null
 		}
@@ -487,4 +508,73 @@ func ensureOnHeap(obj object.Object) error {
 
 func getObjectAddress(obj object.Object) memory.Ptr {
 	return obj.GetAddress()
+}
+
+func TriggerGC() {
+	GlobalVMLock.RUnlock()
+	GlobalVMLock.Lock()
+
+	roots := GlobalRootProvider()
+	err := memory.Lemari.MarkAndCompact(roots)
+	if err != nil {
+		fmt.Printf("GC Error: %v\n", err)
+	}
+
+	GlobalVMLock.Unlock()
+	GlobalVMLock.RLock()
+}
+
+func GlobalRootProvider() []*memory.Ptr {
+	roots := []*memory.Ptr{}
+
+	// Global constants
+	if TruePtr != memory.NilPtr { roots = append(roots, &TruePtr) }
+	if FalsePtr != memory.NilPtr { roots = append(roots, &FalsePtr) }
+
+	activeVMs.Range(func(key, value interface{}) bool {
+		vm := key.(*VM)
+		roots = append(roots, vm.GetRoots()...)
+		return true
+	})
+
+	return roots
+}
+
+func (vm *VM) GetRoots() []*memory.Ptr {
+	roots := []*memory.Ptr{}
+
+	// 1. Stack (Live)
+	for i := 0; i < vm.sp; i++ {
+		roots = append(roots, &vm.stack[i])
+	}
+
+	// 2. Globals
+	for i := range vm.globals {
+		if vm.globals[i] != memory.NilPtr {
+			roots = append(roots, &vm.globals[i])
+		}
+	}
+
+	// 3. Constants
+	for _, obj := range vm.constants {
+		switch val := obj.(type) {
+		case *object.Integer: roots = append(roots, &val.Address)
+		case *object.Float: roots = append(roots, &val.Address)
+		case *object.Boolean: roots = append(roots, &val.Address)
+		case *object.String: roots = append(roots, &val.Address)
+		case *object.CompiledFunction: roots = append(roots, &val.Address)
+		case *object.Null: roots = append(roots, &val.Address)
+		// Add others if needed
+		}
+	}
+
+	// 4. Frames (Closures)
+	for i := 0; i < vm.framesIndex; i++ {
+		f := vm.frames[i]
+		if f != nil && f.cl != nil {
+			roots = append(roots, &f.cl.Address)
+		}
+	}
+
+	return roots
 }

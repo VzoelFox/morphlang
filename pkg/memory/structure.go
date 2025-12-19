@@ -79,6 +79,11 @@ type Cabinet struct {
 	// Snapshot Store (Simple In-Memory Map for Phase X.1)
 	Snapshots      map[int64][]byte
 	NextSnapshotID int64
+
+	// GC Interface
+	RootProvider func() []*Ptr
+	GCTrigger    func()
+	IsGCRunning  bool
 }
 
 // Global Cabinet instance
