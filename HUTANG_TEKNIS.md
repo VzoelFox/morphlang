@@ -7,15 +7,13 @@
 ---
 
 ## 1. Arsitektur & Memory (Phase X - Hybrid State)
-**Status:** CRITICAL
+**Status:** FIXED (Pop Rehydration Removed)
 **Lokasi:** `pkg/memory`, `pkg/vm`, `pkg/object`
 
-Saat ini Morph berada di "Phase X.3 (Hybrid)". Analisis kode menunjukkan:
-- **Dependency Go GC:** Meskipun `pkg/memory` memiliki allocator manual (Mark-and-Compact), VM masih sangat bergantung pada Go Runtime. Setiap operasi stack (`pop()`) memicu fungsi `Rehydrate()` yang mengalokasikan wrapper object Go baru (seperti `&Integer{}`, `&String{}`).
-- **Double Pressure:** Ini menciptakan tekanan ganda: Morph GC mengelola raw bytes, sementara Go GC harus membersihkan jutaan object wrapper kecil yang berumur pendek.
-- **Rekomendasi:**
-  1. **Short-term:** Implementasi Object Pool untuk wrapper di Go agar mengurangi alokasi.
-  2. **Long-term:** "Pure Bytecode Execution" dimana VM beroperasi langsung pada `memory.Ptr` (uint32) tanpa konversi ke Interface Go untuk operasi primitif.
+Perbaikan signifikan telah diterapkan (20 Des 2025):
+- **Pop Optimization:** Fungsi `vm.pop()` tidak lagi memanggil `Rehydrate()`. Wrapper object Go hanya dibuat saat dibutuhkan (lazy) melalui `vm.GetLastPopped()` untuk keperluan testing/debug.
+- **Pure Bytecode Ops:** Operasi aritmatika di `vm_ops.go` sudah beroperasi langsung pada `memory.Ptr` tanpa wrapper.
+- **Hasil:** Eliminasi alokasi Go wrapper di hot-path VM loop. Double GC pressure berkurang drastis.
 
 ## 2. Struktur Data (Missing Structs)
 **Status:** HIGH

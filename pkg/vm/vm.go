@@ -55,7 +55,7 @@ type VM struct {
 	frames      []*Frame
 	framesIndex int
 
-	LastPoppedStackElem object.Object
+	LastPoppedPtr memory.Ptr
 
 	snapshots []VMSnapshot
 
@@ -432,9 +432,13 @@ func (vm *VM) pop() (memory.Ptr, error) {
 	}
 	ptr := vm.stack[vm.sp-1]
 	vm.sp--
-	obj, _ := Rehydrate(ptr)
-	vm.LastPoppedStackElem = obj
+	vm.LastPoppedPtr = ptr
 	return ptr, nil
+}
+
+func (vm *VM) GetLastPopped() object.Object {
+	obj, _ := Rehydrate(vm.LastPoppedPtr)
+	return obj
 }
 
 func (vm *VM) pushClosure(constIndex int, numFree int) error {

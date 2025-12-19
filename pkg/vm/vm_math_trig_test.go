@@ -45,7 +45,7 @@ func TestTrigonometry(t *testing.T) {
 			t.Fatalf("vm error: %s", err)
 		}
 
-		lastPop := vm.LastPoppedStackElem
+		lastPop := vm.GetLastPopped()
 		testFloatObjectApprox(t, lastPop, tt.expected, epsilon)
 	}
 }
