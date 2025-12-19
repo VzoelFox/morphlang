@@ -49,6 +49,8 @@ type Compiler struct {
 	Input    string
 	Filename string
 	analyzed bool
+
+	loadingStack map[string]bool
 }
 
 func New() *Compiler {
