@@ -155,6 +155,7 @@ const (
 	ErrCodeInvalidOp       = "E007"
 	ErrCodeMissingArgs     = "E008"
 	ErrCodeTooManyArgs     = "E009"
+	ErrCodeSignalLaunch    = "SIGNAL_LAUNCH"
 )
 
 type Error struct {
