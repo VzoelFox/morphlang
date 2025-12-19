@@ -226,6 +226,8 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseImportStatement()
 	case lexer.DARI:
 		return p.parseFromImportStatement()
+	case lexer.STRUKTUR:
+		return p.parseStructStatement()
 	case lexer.BERHENTI:
 		return p.parseBreakStatement()
 	case lexer.LANJUT:
@@ -296,6 +298,39 @@ func (p *Parser) parseFromImportStatement() *ImportStatement {
 
 	if p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseStructStatement() *StructStatement {
+	stmt := &StructStatement{Token: p.curToken}
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+	p.nextToken()
+
+	for !p.curTokenIs(lexer.AKHIR) && !p.curTokenIs(lexer.EOF) {
+		if p.curTokenIs(lexer.SEMICOLON) {
+			p.nextToken()
+			continue
+		}
+
+		if p.curTokenIs(lexer.IDENT) {
+			field := &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+			stmt.Fields = append(stmt.Fields, field)
+			p.nextToken()
+		} else {
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(lexer.AKHIR) {
+		p.peekError(lexer.AKHIR)
+		return nil
 	}
 
 	return stmt

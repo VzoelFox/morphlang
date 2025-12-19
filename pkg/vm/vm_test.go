@@ -314,7 +314,7 @@ func runVmTest(t *testing.T, input string, expected interface{}) {
 		t.Fatalf("vm error: %s", err)
 	}
 
-	stackElem := vm.LastPoppedStackElem
+	stackElem := vm.GetLastPopped()
 	testExpectedObject(t, stackElem, expected)
 }
 

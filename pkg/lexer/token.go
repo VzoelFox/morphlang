@@ -78,9 +78,11 @@ const (
 	DARI       = "DARI"
 	BERHENTI   = "BERHENTI"
 	LANJUT     = "LANJUT"
+	STRUKTUR   = "STRUKTUR"
 )
 
 var keywords = map[string]TokenType{
+	"struktur":   STRUKTUR,
 	"fungsi":     FUNGSI,
 	"jika":       JIKA,
 	"atau_jika":  ATAU_JIKA,
