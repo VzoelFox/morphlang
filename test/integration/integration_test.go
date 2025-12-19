@@ -22,7 +22,7 @@ func TestIntegration(t *testing.T) {
 	buildCmd := exec.Command("go", "build", "-o", binPath, cmdSrc)
 	buildCmd.Dir = repoRoot
 	// buildCmd.Stdout = os.Stdout
-	// buildCmd.Stderr = os.Stderr
+	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("Failed to build morph compiler: %v", err)
 	}

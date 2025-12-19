@@ -67,6 +67,15 @@ func Scan(ptr Ptr) ([]*Ptr, error) {
 		initPtr := (*Ptr)(unsafe.Pointer(base))
 		expPtr := (*Ptr)(unsafe.Pointer(base + 8))
 		children = append(children, initPtr, expPtr)
+
+	case TagUpvalue:
+		isOpenPtr := (*int64)(unsafe.Pointer(base + 16))
+		isOpen := *isOpenPtr == 1
+
+		if !isOpen {
+			valPtr := (*Ptr)(unsafe.Pointer(base))
+			children = append(children, valPtr)
+		}
 	}
 
 	return children, nil

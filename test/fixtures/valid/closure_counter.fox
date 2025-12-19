@@ -2,10 +2,10 @@
 # EXPECT: 2
 # EXPECT: 3
 fungsi pembuat_counter()
-  state = [0]
+  i = 0
   kembalikan fungsi()
-    state[0] = state[0] + 1
-    kembalikan state[0]
+    i = i + 1
+    kembalikan i
   akhir
 akhir
 

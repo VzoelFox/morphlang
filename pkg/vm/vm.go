@@ -61,6 +61,8 @@ type VM struct {
 
 	Cabinet *memory.Cabinet
 	Drawer  *memory.Drawer
+
+	openUpvalues map[int]memory.Ptr
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -126,6 +128,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 		snapshots:   make([]VMSnapshot, 0),
 		Cabinet:     &memory.Lemari,
 		Drawer:      drawer,
+		openUpvalues: make(map[int]memory.Ptr),
 	}
 	activeVMs.Store(vm, true)
 	return vm
@@ -251,6 +254,7 @@ func (vm *VM) Run() (err error) {
 			returnValue, err := vm.pop()
 			if err != nil { return err }
 			frame := vm.popFrame()
+			vm.closeUpvalues(frame.basePointer)
 			if vm.framesIndex == 0 {
 				vm.sp = 0
 			} else {
@@ -261,6 +265,7 @@ func (vm *VM) Run() (err error) {
 
 		case compiler.OpReturn:
 			frame := vm.popFrame()
+			vm.closeUpvalues(frame.basePointer)
 			if vm.framesIndex == 0 {
 				vm.sp = 0
 			} else {
@@ -278,10 +283,61 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpGetFree:
 			freeIndex := int(ins[ip+1])
 			vm.currentFrame().ip += 1
-			currentClosure := vm.currentFrame().cl
-			obj := currentClosure.FreeVariables()[freeIndex]
-			if err := ensureOnHeap(obj); err != nil { return err }
-			if err := vm.push(getObjectAddress(obj)); err != nil { return err }
+
+			_, freePtrs, err := memory.ReadClosure(vm.currentFrame().cl.Address)
+			if err != nil { return err }
+			upvaluePtr := freePtrs[freeIndex]
+
+			valPtr, stackIdx, isOpen, err := memory.ReadUpvalue(upvaluePtr)
+			if err != nil { return err }
+
+			if isOpen {
+				valPtr = vm.stack[stackIdx]
+			}
+			if err := vm.push(valPtr); err != nil { return err }
+
+		case compiler.OpSetFree:
+			freeIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+			val, err := vm.pop()
+			if err != nil { return err }
+
+			_, freePtrs, err := memory.ReadClosure(vm.currentFrame().cl.Address)
+			if err != nil { return err }
+			upvaluePtr := freePtrs[freeIndex]
+
+			_, stackIdx, isOpen, err := memory.ReadUpvalue(upvaluePtr)
+			if err != nil { return err }
+
+			if isOpen {
+				vm.stack[stackIdx] = val
+			} else {
+				if err := memory.CloseUpvalue(upvaluePtr, val); err != nil { return err }
+			}
+
+		case compiler.OpCaptureLocal:
+			localIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+			frame := vm.currentFrame()
+			absIndex := frame.basePointer + localIndex
+
+			upvaluePtr, ok := vm.openUpvalues[absIndex]
+			if !ok {
+				var err error
+				upvaluePtr, err = memory.AllocUpvalue(absIndex)
+				if err != nil { return err }
+				vm.openUpvalues[absIndex] = upvaluePtr
+			}
+			if err := vm.push(upvaluePtr); err != nil { return err }
+
+		case compiler.OpLoadUpvalue:
+			freeIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+
+			_, freePtrs, err := memory.ReadClosure(vm.currentFrame().cl.Address)
+			if err != nil { return err }
+			upvaluePtr := freePtrs[freeIndex]
+			if err := vm.push(upvaluePtr); err != nil { return err }
 
 		case compiler.OpArray:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
@@ -707,4 +763,16 @@ func (vm *VM) GetRoots() []*memory.Ptr {
 	}
 
 	return roots
+}
+
+func (vm *VM) closeUpvalues(limit int) {
+	for idx, uvPtr := range vm.openUpvalues {
+		if idx >= limit {
+			val := vm.stack[idx]
+			if err := memory.CloseUpvalue(uvPtr, val); err != nil {
+				panic(err)
+			}
+			delete(vm.openUpvalues, idx)
+		}
+	}
 }

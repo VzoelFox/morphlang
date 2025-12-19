@@ -54,6 +54,8 @@ const (
 	OpClosure   Opcode = 0x43
 	OpGetFree   Opcode = 0x44
 	OpSetFree   Opcode = 0x45
+	OpCaptureLocal Opcode = 0x46
+	OpLoadUpvalue  Opcode = 0x47
 
 	// Modules
 	OpUpdateModule Opcode = 0x50
@@ -101,6 +103,8 @@ var definitions = map[Opcode]*Definition{
 	OpClosure:     {"OpClosure", []int{2, 1}}, // u16 constIndex, u8 numFreeVars
 	OpGetFree:     {"OpGetFree", []int{1}},    // u8 index
 	OpSetFree:     {"OpSetFree", []int{1}},    // u8 index
+	OpCaptureLocal: {"OpCaptureLocal", []int{1}}, // u8 index (local index)
+	OpLoadUpvalue:  {"OpLoadUpvalue", []int{1}},  // u8 index
 	OpUpdateModule: {"OpUpdateModule", []int{}},
 }
 

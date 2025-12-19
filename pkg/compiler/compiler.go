@@ -154,6 +154,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 			if symbol.Scope == GlobalScope {
 				c.emit(OpStoreGlobal, symbol.Index)
+			} else if symbol.Scope == FreeScope {
+				c.emit(OpSetFree, symbol.Index)
 			} else {
 				c.emit(OpStoreLocal, symbol.Index)
 			}
@@ -587,9 +589,9 @@ func (c *Compiler) Compile(node parser.Node) error {
 			if symbol.Scope == GlobalScope {
 				c.emit(OpLoadGlobal, symbol.Index)
 			} else if symbol.Scope == LocalScope {
-				c.emit(OpLoadLocal, symbol.Index)
+				c.emit(OpCaptureLocal, symbol.Index)
 			} else if symbol.Scope == FreeScope {
-				c.emit(OpGetFree, symbol.Index)
+				c.emit(OpLoadUpvalue, symbol.Index)
 			}
 		}
 
