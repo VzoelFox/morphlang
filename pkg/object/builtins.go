@@ -646,6 +646,54 @@ func init() {
 		if !ok { return NewError(fmt.Sprintf("argument to `ptr_dari` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
 		return NewPointer(uint64(addr.GetValue()))
 	})
+
+	RegisterBuiltin("chr", func(args ...Object) Object {
+		if len(args) != 1 { return newArgumentError(len(args), 1) }
+		code, ok := args[0].(*Integer)
+		if !ok { return NewError(fmt.Sprintf("argument to `chr` must be INTEGER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
+		return NewString(string(rune(code.GetValue())))
+	})
+
+	RegisterBuiltin("ord", func(args ...Object) Object {
+		if len(args) != 1 { return newArgumentError(len(args), 1) }
+		str, ok := args[0].(*String)
+		if !ok { return NewError(fmt.Sprintf("argument to `ord` must be STRING, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
+
+		val := str.GetValue()
+		if len(val) == 0 { return NewError("empty string", ErrCodeRuntime, 0, 0) }
+		r := []rune(val)[0]
+		return NewInteger(int64(r))
+	})
+
+	RegisterBuiltin("baca_byte", func(args ...Object) Object {
+		if len(args) != 2 { return newArgumentError(len(args), 2) }
+		ptr, ok := args[0].(*Pointer)
+		if !ok { return NewError(fmt.Sprintf("first argument to `baca_byte` must be POINTER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
+		offset, ok := args[1].(*Integer)
+		if !ok { return NewError(fmt.Sprintf("second argument to `baca_byte` must be INTEGER, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0) }
+
+		target := memory.Ptr(ptr.GetValue()).Add(uint32(offset.GetValue()))
+		data, err := memory.Read(target, 1)
+		if err != nil { return NewError("baca_byte error: "+err.Error(), ErrCodeRuntime, 0, 0) }
+
+		return NewInteger(int64(data[0]))
+	})
+
+	RegisterBuiltin("tulis_byte", func(args ...Object) Object {
+		if len(args) != 3 { return newArgumentError(len(args), 3) }
+		ptr, ok := args[0].(*Pointer)
+		if !ok { return NewError(fmt.Sprintf("first argument to `tulis_byte` must be POINTER, got %s", args[0].Type()), ErrCodeTypeMismatch, 0, 0) }
+		offset, ok := args[1].(*Integer)
+		if !ok { return NewError(fmt.Sprintf("second argument to `tulis_byte` must be INTEGER, got %s", args[1].Type()), ErrCodeTypeMismatch, 0, 0) }
+		val, ok := args[2].(*Integer)
+		if !ok { return NewError(fmt.Sprintf("third argument to `tulis_byte` must be INTEGER, got %s", args[2].Type()), ErrCodeTypeMismatch, 0, 0) }
+
+		target := memory.Ptr(ptr.GetValue()).Add(uint32(offset.GetValue()))
+		data := []byte{byte(val.GetValue())}
+		err := memory.Write(target, data)
+		if err != nil { return NewError("tulis_byte error: "+err.Error(), ErrCodeRuntime, 0, 0) }
+		return NewNull()
+	})
 }
 
 // ...
