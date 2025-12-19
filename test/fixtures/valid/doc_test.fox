@@ -1,0 +1,9 @@
+# Ini dokumentasi fungsi
+fungsi halo()
+  cetak("halo")
+akhir
+
+# Ini dokumentasi struktur
+struktur Orang
+  nama
+akhir
