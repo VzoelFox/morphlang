@@ -64,6 +64,12 @@ func TestIntegration(t *testing.T) {
 				t.Fatalf("Execution failed: %v\nStdout: %s\nStderr: %s", err, out.String(), stderr.String())
 			}
 
+			// Verify .fox.vz generation (AGENTS.md requirement)
+			vzPath := path + ".vz"
+			if _, err := os.Stat(vzPath); os.IsNotExist(err) {
+				t.Errorf("Context file not generated: %s", vzPath)
+			}
+
 			output := strings.TrimSpace(out.String())
 			if output != expected {
 				t.Errorf("Output mismatch for %s.\nExpected:\n%s\nGot:\n%s", f.Name(), expected, output)
