@@ -1,0 +1,17 @@
+fungsi outer()
+  x = 10
+  fungsi inner()
+    x = x + 5
+    kembalikan x
+  akhir
+  kembalikan inner
+akhir
+
+closure = outer()
+res1 = closure()
+res2 = closure()
+cetak(res1)
+cetak(res2)
+
+# EXPECT: 15
+# EXPECT: 20
