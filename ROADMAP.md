@@ -258,11 +258,11 @@ morph/
 - [ ] Write usage documentation
 
 **Patch 4.3: Examples**
-- [ ] Write `hello_world.fox`
-- [ ] Write `fibonacci.fox`
-- [ ] Write `calculator.fox`
-- [ ] Write `faktorial.fox`
-- [ ] Write `sorting.fox`
+- [x] Write `hello_world.fox`
+- [x] Write `fibonacci.fox`
+- [x] Write `calculator.fox`
+- [x] Write `faktorial.fox`
+- [x] Write `sorting.fox`
 
 **Patch 4.4: Documentation**
 - [ ] Write `docs/tutorial.md` (getting started guide)
@@ -273,7 +273,7 @@ morph/
 - [ ] 200+ passing tests total
 - [ ] Working compiler executable
 - [ ] Working REPL
-- [ ] 5+ example programs
+- [x] 5+ example programs
 - [ ] Complete documentation
 
 ---
@@ -320,7 +320,7 @@ morph/
 
 ### **PHASE 6: COTC (Core of The Core) - Standard Library**
 
-**Concept:** COTC is the foundational library. Currently implemented as a mix of **Go Builtins** (for performance) and Morph wrappers.
+**Concept:** COTC is the foundational library. Currently implemented as a mix of **Go Builtins** (for performance) and Morph wrappers. *(Note: Status is Hybrid/Scaffolding - See HUTANG_TEKNIS.md)*
 
 **Patch 6.1: I/O Module (Builtins)**
 - [x] `baca_file(path)` - read file

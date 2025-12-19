@@ -2,7 +2,7 @@
 
 **Tanggal:** 20 Desember 2025
 **Auditor:** Jules (AI Agent)
-**Status:** Deep Analysis
+**Status:** Deep Analysis (Updated)
 
 ---
 
@@ -36,22 +36,34 @@ Output `.fox.vz` telah mencapai standar `AGENTS.md` (20 Des 2025).
 - **Hasil:** AI Agent memiliki visibilitas penuh terhadap maksud kode (dokumentasi) dan perilaku (tipe/error).
 
 ## 4. Ekosistem (Standard Library / COTC)
-**Status:** MAJOR
+**Status:** MAJOR (Fake Completion in Roadmap)
 **Lokasi:** `lib/cotc` vs `pkg/object/builtins.go`
 
 - **Masalah:** `lib/cotc` hampir kosong. Sebagian besar logika "standar" (String ops, Math, IO) masih di-hardcode sebagai Go Builtins di `pkg/object/builtins.go`.
+- **Discrepancy:** `ROADMAP.md` menandai Phase 6 (COTC) sebagai "Selesai" (v1.1.0), padahal implementasinya masih hybrid/scaffolding.
 - **Dampak:** Portabilitas bahasa rendah dan ukuran binary VM membengkak.
 - **Rekomendasi:** Freeze fitur VM. Mulai migrasi logika (misal: `gabung`, `pisah`) ke kode Morph native di `lib/cotc`, tinggalkan hanya primitive paling dasar di VM (Native Interface).
 
 ## 5. Kepatuhan Error Handling (VM Robustness)
-**Status:** MEDIUM
-**Lokasi:** `pkg/vm/vm.go`
+**Status:** CRITICAL
+**Lokasi:** `pkg/vm/vm.go`, `pkg/vm/vm_ops.go`
 
-- **Masalah:** VM mengembalikan Go `error` (Crash/Panic) untuk kesalahan runtime seperti "Argument Mismatch", melanggar prinsip "Error as Value" di `AGENTS.md` yang mengharuskan VM tidak boleh crash.
-- **Dampak:** Program berhenti total alih-alih memberikan objek error yang bisa ditangani user.
-- **Rekomendasi:** Ubah logic VM untuk mem-push Objek Error ke stack alih-alih me-return Go error untuk kesalahan non-sistem.
+- **Masalah:** VM mengembalikan Go `error` (Crash/Panic) untuk kesalahan runtime seperti "Argument Mismatch", "Type Mismatch", atau "Index Out of Bounds".
+- **Pelanggaran:** Ini melanggar prinsip "Error as Value" di `AGENTS.md` yang mengharuskan VM **tidak boleh crash/panic** kecuali untuk kesalahan sistem (OOM). Kesalahan logika user harus mengembalikan objek `Error` ke stack.
+- **Dampak:** Program berhenti total (crash) alih-alih memberikan kesempatan recovery (`jika adalah_galat(...)`).
+- **Rekomendasi:** Refactor `vm.Run` loop dan opcode handlers agar mem-push Objek Error ke stack saat terjadi kesalahan runtime.
+
+## 6. Dokumentasi & Spesifikasi (Documentation Debt)
+**Status:** HIGH
+**Lokasi:** `AGENTS.md`, `PEDOMAN_AWAL.md`
+
+- **CLI Discrepancy:** `AGENTS.md` mencontohkan perintah `morph compile --debug <file>`, namun implementasi `main.go` menggunakan parser flag Go standar yang mengharuskan flag sebelum subcommand (`morph --debug compile <file>`). Ini menyesatkan users/agents.
+- **Obsolete Spec:** File `PEDOMAN_AWAL.md` masih tersimpan di repo namun isinya bertentangan dengan `AGENTS.md` (Source of Truth).
+  - Ekstensi file: `.morph` (Pedoman) vs `.fox` (Agents/Roadmap).
+  - Akses Map: `orang[:nama]` (Pedoman) vs `orang.nama` (Agents).
+- **Rekomendasi:** Refactor parser CLI di `main.go` agar mendukung urutan argumen sesuai contoh di `AGENTS.md` (`morph compile --debug ...`), dan tandai `PEDOMAN_AWAL.md` sebagai **DEPRECATED** atau hapus.
 
 ---
 
 **Kesimpulan:**
-Pondasi Morph solid secara konsep, namun implementasi saat ini masih sangat bergantung pada "scaffolding" Go Runtime. Untuk mencapai visi "Robust Foundation", prioritas utama adalah **memutuskan ketergantungan Go GC** dan **memperbaiki Analyzer** agar sesuai janji "Context-Aware".
+Pondasi Morph solid secara konsep, namun implementasi saat ini "bergerak terlalu cepat" meninggalkan hutang teknis pada kepatuhan spesifikasi (Error Handling) dan dokumentasi. Prioritas perbaikan harus pada **VM Robustness** agar sesuai dengan janji "Zero Ambiguity / Error as Value".

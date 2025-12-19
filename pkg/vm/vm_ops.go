@@ -6,11 +6,35 @@ import (
 	"github.com/VzoelFox/morphlang/pkg/memory"
 )
 
+// Helper to check and propagate error objects
+func (vm *VM) checkAndPropagateError(ptrs ...memory.Ptr) (bool, error) {
+	for _, ptr := range ptrs {
+		header, err := memory.ReadHeader(ptr)
+		if err != nil { return false, err }
+		if header.Type == memory.TagError {
+			// Push error back to stack as result
+			return true, vm.push(ptr)
+		}
+	}
+	return false, nil
+}
+
+// Helper to create and push runtime error
+func (vm *VM) pushRuntimeError(msg string) error {
+	errPtr, err := vm.newError(msg)
+	if err != nil { return err }
+	return vm.push(errPtr)
+}
+
 func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 	right, err := vm.pop()
 	if err != nil { return err }
 	left, err := vm.pop()
 	if err != nil { return err }
+
+	if handled, err := vm.checkAndPropagateError(left, right); handled || err != nil {
+		return err
+	}
 
 	leftHeader, err := memory.ReadHeader(left)
 	if err != nil { return err }
@@ -19,7 +43,7 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 
 	// String Concatenation (Mixed Support)
 	if leftHeader.Type == memory.TagString || rightHeader.Type == memory.TagString {
-		if op != compiler.OpAdd { return fmt.Errorf("string only supports add") }
+		if op != compiler.OpAdd { return vm.pushRuntimeError("string only supports add") }
 
 		leftStr := stringify(left)
 		rightStr := stringify(right)
@@ -55,7 +79,7 @@ func (vm *VM) executeBinaryOperation(op compiler.Opcode) error {
 		case compiler.OpSub: res = leftVal - rightVal
 		case compiler.OpMul: res = leftVal * rightVal
 		case compiler.OpDiv:
-			if rightVal == 0 { return fmt.Errorf("integer divide by zero") }
+			if rightVal == 0 { return vm.pushRuntimeError("integer divide by zero") }
 			res = leftVal / rightVal
 		}
 		ptr, err := memory.AllocInteger(res)
@@ -69,6 +93,10 @@ func (vm *VM) executeComparison(op compiler.Opcode) error {
 	if err != nil { return err }
 	left, err := vm.pop()
 	if err != nil { return err }
+
+	if handled, err := vm.checkAndPropagateError(left, right); handled || err != nil {
+		return err
+	}
 
 	leftHeader, _ := memory.ReadHeader(left)
 	rightHeader, _ := memory.ReadHeader(right)
@@ -139,7 +167,7 @@ func (vm *VM) executeComparison(op compiler.Opcode) error {
 		return vm.push(TruePtr)
 	}
 
-	return fmt.Errorf("unsupported comparison")
+	return vm.pushRuntimeError("unsupported comparison")
 }
 
 func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
@@ -148,11 +176,15 @@ func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
 	left, err := vm.pop()
 	if err != nil { return err }
 
+	if handled, err := vm.checkAndPropagateError(left, right); handled || err != nil {
+		return err
+	}
+
 	leftHeader, _ := memory.ReadHeader(left)
 	rightHeader, _ := memory.ReadHeader(right)
 
 	if leftHeader.Type != memory.TagInteger || rightHeader.Type != memory.TagInteger {
-		return fmt.Errorf("unsupported types for bitwise operation: type tag %d type tag %d", leftHeader.Type, rightHeader.Type)
+		return vm.pushRuntimeError(fmt.Sprintf("unsupported types for bitwise operation: type tag %d type tag %d", leftHeader.Type, rightHeader.Type))
 	}
 
 	leftVal, _ := memory.ReadInteger(left)
@@ -167,10 +199,10 @@ func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
 	case compiler.OpXor:
 		res = leftVal ^ rightVal
 	case compiler.OpLShift:
-		if rightVal < 0 { return fmt.Errorf("negative shift count") }
+		if rightVal < 0 { return vm.pushRuntimeError("negative shift count") }
 		res = leftVal << rightVal
 	case compiler.OpRShift:
-		if rightVal < 0 { return fmt.Errorf("negative shift count") }
+		if rightVal < 0 { return vm.pushRuntimeError("negative shift count") }
 		res = leftVal >> rightVal
 	}
 
@@ -182,6 +214,15 @@ func (vm *VM) executeBitwiseOperation(op compiler.Opcode) error {
 func (vm *VM) executeBangOperator() error {
 	operand, err := vm.pop()
 	if err != nil { return err }
+
+	// Bang can work on error (Error is truthy?), or propagate?
+	// Usually !Error -> False (since Error is truthy object)
+	// OR we can say logic ops treat Error as Error.
+	// Let's propagate for safety.
+	if handled, err := vm.checkAndPropagateError(operand); handled || err != nil {
+		return err
+	}
+
 	ptr, _ := memory.AllocBoolean(!isTruthy(operand))
 	return vm.push(ptr)
 }
@@ -189,6 +230,11 @@ func (vm *VM) executeBangOperator() error {
 func (vm *VM) executeMinusOperator() error {
 	operand, err := vm.pop()
 	if err != nil { return err }
+
+	if handled, err := vm.checkAndPropagateError(operand); handled || err != nil {
+		return err
+	}
+
 	header, _ := memory.ReadHeader(operand)
 	if header.Type == memory.TagInteger {
 		val, _ := memory.ReadInteger(operand)
@@ -199,19 +245,24 @@ func (vm *VM) executeMinusOperator() error {
 		ptr, _ := memory.AllocFloat(-val)
 		return vm.push(ptr)
 	}
-	return fmt.Errorf("minus not supported for type tag %d", header.Type)
+	return vm.pushRuntimeError(fmt.Sprintf("minus not supported for type tag %d", header.Type))
 }
 
 func (vm *VM) executeBitNotOperator() error {
 	operand, err := vm.pop()
 	if err != nil { return err }
+
+	if handled, err := vm.checkAndPropagateError(operand); handled || err != nil {
+		return err
+	}
+
 	header, _ := memory.ReadHeader(operand)
 	if header.Type == memory.TagInteger {
 		val, _ := memory.ReadInteger(operand)
 		ptr, _ := memory.AllocInteger(^val)
 		return vm.push(ptr)
 	}
-	return fmt.Errorf("bitnot not supported for type tag %d", header.Type)
+	return vm.pushRuntimeError(fmt.Sprintf("bitnot not supported for type tag %d", header.Type))
 }
 
 func (vm *VM) buildArray(startIndex, endIndex int) (memory.Ptr, error) {
@@ -240,12 +291,16 @@ func (vm *VM) buildHash(startIndex, endIndex int) (memory.Ptr, error) {
 }
 
 func (vm *VM) executeIndexExpression(left, index memory.Ptr) error {
+	if handled, err := vm.checkAndPropagateError(left, index); handled || err != nil {
+		return err
+	}
+
 	header, err := memory.ReadHeader(left)
 	if err != nil { return err }
 
 	if header.Type == memory.TagArray {
 		idx, err := memory.ReadInteger(index)
-		if err != nil { return fmt.Errorf("index must be integer") }
+		if err != nil { return vm.pushRuntimeError("index must be integer") }
 
 		elemPtr, err := memory.ReadArrayElement(left, int(idx))
 		if err != nil { return vm.push(NullPtr) }
@@ -265,7 +320,7 @@ func (vm *VM) executeIndexExpression(left, index memory.Ptr) error {
 
 	if header.Type == memory.TagString {
 		idx, err := memory.ReadInteger(index)
-		if err != nil { return fmt.Errorf("string index must be integer") }
+		if err != nil { return vm.pushRuntimeError("string index must be integer") }
 
 		str, err := memory.ReadString(left)
 		if err != nil { return err }
@@ -291,7 +346,7 @@ func (vm *VM) executeIndexExpression(left, index memory.Ptr) error {
 
 		// Expect index to be String
 		targetKey, err := memory.ReadString(index)
-		if err != nil { return fmt.Errorf("struct key must be string") }
+		if err != nil { return vm.pushRuntimeError("struct key must be string") }
 
 		for i := 0; i < length; i++ {
 			fieldPtr, _ := memory.ReadArrayElement(fieldsArrPtr, i)
@@ -305,37 +360,22 @@ func (vm *VM) executeIndexExpression(left, index memory.Ptr) error {
 		return vm.push(NullPtr)
 	}
 
-	return fmt.Errorf("index not supported for type tag %d", header.Type)
+	return vm.pushRuntimeError(fmt.Sprintf("index not supported for type tag %d", header.Type))
 }
 
 func (vm *VM) executeSetIndexExpression(left, index, val memory.Ptr) error {
+	if handled, err := vm.checkAndPropagateError(left, index, val); handled || err != nil {
+		return err
+	}
+
 	header, _ := memory.ReadHeader(left)
 
 	if header.Type == memory.TagArray {
 		idx, err := memory.ReadInteger(index)
-		if err != nil { return fmt.Errorf("array index must be integer") }
+		if err != nil { return vm.pushRuntimeError("array index must be integer") }
 
 		err = memory.WriteArrayElement(left, int(idx), val)
 		if err != nil { return err }
-		// Assignment usually returns the value assigned? Or Null?
-		// We push Null to signify statement done (popped by Block).
-		// Or push Val if it's an expression.
-		// Standard: Assignment expression evaluates to assigned value.
-		// So we push `val`. (But we popped it).
-		// Wait, OpSetIndex pops (left, index, val).
-		// If we want to return it, we push `val` back.
-		// But in Morph, assignment is statement?
-		// Compiler emits `OpSetIndex` for `AssignmentStatement` (IndexExpression).
-		// `Compile` for `AssignmentStatement` does NOT emit `OpPop`?
-		// Let's check `compiler.go`.
-		// `c.emit(OpSetIndex)`.
-		// If `OpSetIndex` pushes nothing, then stack is clean.
-		// If `OpSetIndex` pushes something, it remains on stack.
-		// `ExpressionStatement` emits `OpPop`.
-		// `AssignmentStatement` is a statement.
-		// Does it return value?
-		// In `evaluator`, it returns `Null`.
-		// So `OpSetIndex` should push `NullPtr`.
 		return vm.push(NullPtr)
 	}
 
@@ -350,10 +390,10 @@ func (vm *VM) executeSetIndexExpression(left, index, val memory.Ptr) error {
 			}
 		}
 		// Append (Dynamic) - Not supported in fixed Hash
-		return fmt.Errorf("hash update key not found (dynamic hash unsupported)")
+		return vm.pushRuntimeError("hash update key not found (dynamic hash unsupported)")
 	}
 
-	return fmt.Errorf("set index not supported")
+	return vm.pushRuntimeError("set index not supported")
 }
 
 // Helpers
@@ -370,6 +410,8 @@ func isTruthy(ptr memory.Ptr) bool {
 		val, _ := memory.ReadInteger(ptr)
 		return val != 0
 	}
+	// Error is truthy?
+	// TagError is not handled here, so returns true.
 	return true
 }
 
@@ -405,6 +447,11 @@ func stringify(ptr memory.Ptr) string {
 		if val { return "benar" } else { return "salah" }
 	}
 	if header.Type == memory.TagNull { return "kosong" }
+	if header.Type == memory.TagError {
+		msgPtr, _, _, _, _ := memory.ReadError(ptr)
+		msg, _ := memory.ReadString(msgPtr)
+		return "Error: " + msg
+	}
 	return fmt.Sprintf("ptr:%d", ptr)
 }
 
