@@ -9,8 +9,25 @@ import (
 // Thread-safe.
 func (c *Cabinet) Alloc(size int) (Ptr, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.alloc(size)
+	ptr, err := c.alloc(size)
+	c.mu.Unlock()
+
+	// SAFE ALLOC RETRY PATTERN
+	// If OOM occurs, we must release the Cabinet lock (c.mu) before triggering GC.
+	// This is because GCTrigger (in VM) will try to acquire GlobalVMLock.
+	// If we hold c.mu, and another thread holds GlobalVMLock and wants c.mu, we deadlock.
+	if err == ErrOOM && c.GCTrigger != nil {
+		// Trigger Stop-The-World GC
+		// This blocks until GC is done.
+		c.GCTrigger()
+
+		// Retry Allocation (Once)
+		c.mu.Lock()
+		ptr, err = c.alloc(size)
+		c.mu.Unlock()
+	}
+
+	return ptr, err
 }
 
 // Internal recursive alloc (assumes lock held)
