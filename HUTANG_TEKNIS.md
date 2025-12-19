@@ -26,14 +26,14 @@ Fitur `Struct` telah diimplementasikan (20 Des 2025):
 - **Hasil:** Struktur data berkinerja tinggi dengan offset-based field access (via Schema lookup).
 
 ## 3. Tooling Debt (Analyzer / Context Generator)
-**Status:** IMPROVED (Type Inference & Error Logic Added)
-**Lokasi:** `pkg/analysis/analyzer.go`
+**Status:** FIXED (Documentation Extraction Added)
+**Lokasi:** `pkg/analysis/analyzer.go`, `pkg/lexer`, `pkg/parser`
 
-Output `.fox.vz` telah ditingkatkan (20 Des 2025).
-- **Type Inference:** Kini mendukung recursive expression analysis (variable lookup, binary ops).
-- **Symbol Tracking:** Kondisi error (`if ... return galat`) kini diekstrak.
-- **Sisa Gap:** Dokumentasi (`doc`) belum diekstrak (perlu dukungan AST).
-- **Rekomendasi Lanjutan:** Tambahkan dukungan komentar di Parser untuk ekstraksi dokumentasi.
+Output `.fox.vz` telah mencapai standar `AGENTS.md` (20 Des 2025).
+- **Type Inference:** Recursive expression analysis.
+- **Error Tracking:** Kondisi error (`if ... return galat`) diekstrak.
+- **Dokumentasi:** Lexer & Parser dimodifikasi untuk menangkap komentar `# doc` dan menempelkannya ke AST Node (Fungsi/Struct). Analyzer kini mengisi field `doc` di context.
+- **Hasil:** AI Agent memiliki visibilitas penuh terhadap maksud kode (dokumentasi) dan perilaku (tipe/error).
 
 ## 4. Ekosistem (Standard Library / COTC)
 **Status:** MAJOR

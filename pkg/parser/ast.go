@@ -285,6 +285,7 @@ type FunctionLiteral struct {
 	Name       string
 	Parameters []*Identifier
 	Body       *BlockStatement
+	Doc        string
 }
 
 func (fl *FunctionLiteral) expressionNode()      {}
@@ -352,6 +353,7 @@ type StructStatement struct {
 	Token  lexer.Token // The 'struktur' token
 	Name   *Identifier
 	Fields []*Identifier
+	Doc    string
 }
 
 func (ss *StructStatement) statementNode()       {}

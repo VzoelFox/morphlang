@@ -202,6 +202,9 @@ func (l *Lexer) readCodeToken() Token {
 		tok = newToken(LBRACKET, l.ch)
 	case ']':
 		tok = newToken(RBRACKET, l.ch)
+	case '#':
+		tok = Token{Type: COMMENT, Literal: l.readComment(), Line: tokLine, Column: tokCol, HasLeadingSpace: hasLeadingSpace}
+		return tok
 	case '"':
 		// Optimization for empty string
 		if l.peekChar() == '"' {
@@ -365,12 +368,7 @@ func (l *Lexer) readStringContent() string {
 }
 
 func (l *Lexer) skipWhitespace() {
-	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' || l.ch == '#' {
-		if l.ch == '#' {
-			l.skipComment()
-			continue
-		}
-
+	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
 		if l.ch == '\n' {
 			l.line += 1
 			l.column = 0
@@ -379,8 +377,14 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-func (l *Lexer) skipComment() {
+func (l *Lexer) readComment() string {
+	l.readChar() // consume '#'
+	if l.ch == ' ' {
+		l.readChar()
+	}
+	position := l.position
 	for l.ch != '\n' && l.ch != 0 {
 		l.readChar()
 	}
+	return l.input[position:l.position]
 }

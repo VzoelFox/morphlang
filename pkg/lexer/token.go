@@ -79,6 +79,7 @@ const (
 	BERHENTI   = "BERHENTI"
 	LANJUT     = "LANJUT"
 	STRUKTUR   = "STRUKTUR"
+	COMMENT    = "COMMENT"
 )
 
 var keywords = map[string]TokenType{

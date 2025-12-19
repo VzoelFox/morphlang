@@ -155,6 +155,7 @@ func (a *Analyzer) analyzeFunction(fn *parser.FunctionLiteral) {
 		LocalVars:       []string{},
 		Calls:           []string{},
 		ErrorConditions: []ErrorCond{},
+		Doc:             fn.Doc,
 	}
 
 	for _, p := range fn.Parameters {

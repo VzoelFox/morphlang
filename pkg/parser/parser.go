@@ -89,6 +89,8 @@ type Parser struct {
 	curToken  lexer.Token
 	peekToken lexer.Token
 
+	curComment string
+
 	prefixParseFns map[lexer.TokenType]prefixParseFn
 	infixParseFns  map[lexer.TokenType]infixParseFn
 }
@@ -208,10 +210,20 @@ func (p *Parser) ParseProgram() *Program {
 	program.Statements = []Statement{}
 
 	for p.curToken.Type != lexer.EOF {
+		if p.curToken.Type == lexer.COMMENT {
+			if p.curComment != "" {
+				p.curComment += "\n"
+			}
+			p.curComment += p.curToken.Literal
+			p.nextToken()
+			continue
+		}
+
 		stmt := p.parseStatement()
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
 		}
+		p.curComment = ""
 		p.nextToken()
 	}
 
@@ -305,6 +317,7 @@ func (p *Parser) parseFromImportStatement() *ImportStatement {
 
 func (p *Parser) parseStructStatement() *StructStatement {
 	stmt := &StructStatement{Token: p.curToken}
+	stmt.Doc = p.curComment
 
 	if !p.expectPeek(lexer.IDENT) {
 		return nil
@@ -689,6 +702,7 @@ func (p *Parser) parseIfExpression() Expression {
 
 func (p *Parser) parseFunctionLiteral() Expression {
 	lit := &FunctionLiteral{Token: p.curToken}
+	lit.Doc = p.curComment
 
 	if p.peekTokenIs(lexer.IDENT) {
 		p.nextToken()
