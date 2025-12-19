@@ -53,6 +53,9 @@ const (
 	OpReturnValue Opcode = 0x42 // RETURN_VAL in spec (returns value)
 	OpClosure   Opcode = 0x43
 	OpGetFree   Opcode = 0x44
+
+	// Modules
+	OpUpdateModule Opcode = 0x50
 )
 
 type Definition struct {
@@ -96,6 +99,7 @@ var definitions = map[Opcode]*Definition{
 	OpReturnValue: {"OpReturnValue", []int{}},
 	OpClosure:     {"OpClosure", []int{2, 1}}, // u16 constIndex, u8 numFreeVars
 	OpGetFree:     {"OpGetFree", []int{1}},    // u8 index
+	OpUpdateModule: {"OpUpdateModule", []int{}},
 }
 
 func Lookup(op byte) (*Definition, error) {

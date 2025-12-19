@@ -59,6 +59,8 @@ func FromPtr(ptr memory.Ptr) Object {
 		return GetResource(ptr)
 	case memory.TagPointer:
 		return &Pointer{Address: ptr}
+	case memory.TagModule:
+		return &Module{Address: ptr}
 	default:
 		// Fallback or Panic
 		panic(fmt.Sprintf("FromPtr: unknown type tag %d", header.Type))

@@ -62,6 +62,11 @@ func Scan(ptr Ptr) ([]*Ptr, error) {
 		// Layout: [Ptr(8)]
 		p := (*Ptr)(unsafe.Pointer(base))
 		children = append(children, p)
+
+	case TagModule:
+		initPtr := (*Ptr)(unsafe.Pointer(base))
+		expPtr := (*Ptr)(unsafe.Pointer(base + 8))
+		children = append(children, initPtr, expPtr)
 	}
 
 	return children, nil
