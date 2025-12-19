@@ -28,14 +28,14 @@ Saat ini Morph berada di "Phase X.3 (Hybrid)". Analisis kode menunjukkan:
 - **Rekomendasi:** Implementasi `OpNewStruct` dan `OpGetField` yang menggunakan layout memori tetap (seperti Array namun dengan field bernama).
 
 ## 3. Tooling Debt (Analyzer / Context Generator)
-**Status:** CRITICAL (Untuk AI Agent)
+**Status:** IMPROVED (Type Inference & Error Logic Added)
 **Lokasi:** `pkg/analysis/analyzer.go`
 
-Output `.fox.vz` saat ini tidak memenuhi standar `AGENTS.md`.
-- **Type Inference:** Hanya bekerja untuk literal sederhana. Parameter fungsi selalu dianggap `any`.
-- **Symbol Tracking:** Dokumentasi (`doc`) dan kondisi error (`error_conditions`) tidak diekstrak dari kode.
-- **Dampak:** AI Agent bekerja "buta" tanpa konteks mendalam, meningkatkan risiko halusinasi.
-- **Rekomendasi:** Upgrade `Analyzer` untuk melakukan *Control Flow Analysis* sederhana dan ekstraksi komentar dokumentasi.
+Output `.fox.vz` telah ditingkatkan (20 Des 2025).
+- **Type Inference:** Kini mendukung recursive expression analysis (variable lookup, binary ops).
+- **Symbol Tracking:** Kondisi error (`if ... return galat`) kini diekstrak.
+- **Sisa Gap:** Dokumentasi (`doc`) belum diekstrak (perlu dukungan AST).
+- **Rekomendasi Lanjutan:** Tambahkan dukungan komentar di Parser untuk ekstraksi dokumentasi.
 
 ## 4. Ekosistem (Standard Library / COTC)
 **Status:** MAJOR
