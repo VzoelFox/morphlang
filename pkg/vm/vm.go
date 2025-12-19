@@ -480,12 +480,21 @@ func (vm *VM) executeCall(numArgs int) error {
 	header, err := memory.ReadHeader(calleePtr)
 	if err != nil { return err }
 
+	if header.Type == memory.TagError {
+		// Propagate error: Drop args, leave error on stack
+		vm.sp -= numArgs
+		return nil
+	}
+
 	if header.Type == memory.TagClosure {
 		clWrapper := &object.Closure{Address: calleePtr}
 		fnWrapper := clWrapper.Fn()
 
 		if numArgs != fnWrapper.NumParameters() {
-			return fmt.Errorf("arg mismatch")
+			vm.sp -= (numArgs + 1)
+			errPtr, err := vm.newError(fmt.Sprintf("arg mismatch: want %d, got %d", fnWrapper.NumParameters(), numArgs))
+			if err != nil { return err }
+			return vm.push(errPtr)
 		}
 
 		frame := NewFrame(clWrapper, vm.sp-numArgs)
@@ -500,7 +509,10 @@ func (vm *VM) executeCall(numArgs int) error {
 
 	if header.Type == memory.TagModule {
 		if numArgs != 0 {
-			return fmt.Errorf("module import takes 0 args")
+			vm.sp -= (numArgs + 1)
+			errPtr, err := vm.newError("module import takes 0 args")
+			if err != nil { return err }
+			return vm.push(errPtr)
 		}
 		return vm.executeModuleCall(calleePtr)
 	}
@@ -509,7 +521,10 @@ func (vm *VM) executeCall(numArgs int) error {
 		return vm.executeSchemaCall(calleePtr, numArgs)
 	}
 
-	return fmt.Errorf("calling non-function")
+	vm.sp -= (numArgs + 1)
+	errPtr, err := vm.newError(fmt.Sprintf("calling non-function: type %d", header.Type))
+	if err != nil { return err }
+	return vm.push(errPtr)
 }
 
 func (vm *VM) executeSchemaCall(schemaPtr memory.Ptr, numArgs int) error {
@@ -520,7 +535,10 @@ func (vm *VM) executeSchemaCall(schemaPtr memory.Ptr, numArgs int) error {
 	if err != nil { return err }
 
 	if numArgs != length {
-		return fmt.Errorf("struct init arg mismatch: want %d, got %d", length, numArgs)
+		vm.sp -= (numArgs + 1)
+		errPtr, err := vm.newError(fmt.Sprintf("struct init arg mismatch: want %d, got %d", length, numArgs))
+		if err != nil { return err }
+		return vm.push(errPtr)
 	}
 
 	structPtr, err := memory.AllocStruct(schemaPtr, numArgs)
@@ -822,4 +840,14 @@ func (vm *VM) closeUpvalues(limit int) {
 			delete(vm.openUpvalues, idx)
 		}
 	}
+}
+
+func (vm *VM) newError(msg string) (memory.Ptr, error) {
+	msgPtr, err := memory.AllocString(msg)
+	if err != nil { return memory.NilPtr, err }
+
+	codePtr, err := memory.AllocString("RUNTIME_ERROR")
+	if err != nil { return memory.NilPtr, err }
+
+	return memory.AllocError(msgPtr, codePtr, 0, 0)
 }
