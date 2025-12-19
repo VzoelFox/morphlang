@@ -61,6 +61,8 @@ type VM struct {
 
 	Cabinet *memory.Cabinet
 	Drawer  *memory.Drawer
+
+	openUpvalues map[int]memory.Ptr
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -87,6 +89,13 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 	if len(memory.Lemari.Drawers) == 0 {
 		memory.InitCabinet()
+		// Re-allocate global constants as RAM was wiped
+		True = object.NewBoolean(true)
+		False = object.NewBoolean(false)
+		Null = object.NewNull()
+		TruePtr = True.Address
+		FalsePtr = False.Address
+		NullPtr = Null.Address
 	}
 
 	bootstrapOnce.Do(func() {
@@ -95,6 +104,9 @@ func New(bytecode *compiler.Bytecode) *VM {
 		}
 		if FalsePtr == 0 {
 			FalsePtr = False.Address
+		}
+		if NullPtr == 0 {
+			NullPtr = Null.Address
 		}
 		memory.Lemari.RootProvider = GlobalRootProvider
 		memory.Lemari.GCTrigger = TriggerGC
@@ -116,6 +128,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 		snapshots:   make([]VMSnapshot, 0),
 		Cabinet:     &memory.Lemari,
 		Drawer:      drawer,
+		openUpvalues: make(map[int]memory.Ptr),
 	}
 	activeVMs.Store(vm, true)
 	return vm
@@ -241,6 +254,7 @@ func (vm *VM) Run() (err error) {
 			returnValue, err := vm.pop()
 			if err != nil { return err }
 			frame := vm.popFrame()
+			vm.closeUpvalues(frame.basePointer)
 			if vm.framesIndex == 0 {
 				vm.sp = 0
 			} else {
@@ -251,6 +265,7 @@ func (vm *VM) Run() (err error) {
 
 		case compiler.OpReturn:
 			frame := vm.popFrame()
+			vm.closeUpvalues(frame.basePointer)
 			if vm.framesIndex == 0 {
 				vm.sp = 0
 			} else {
@@ -268,10 +283,61 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpGetFree:
 			freeIndex := int(ins[ip+1])
 			vm.currentFrame().ip += 1
-			currentClosure := vm.currentFrame().cl
-			obj := currentClosure.FreeVariables()[freeIndex]
-			if err := ensureOnHeap(obj); err != nil { return err }
-			if err := vm.push(getObjectAddress(obj)); err != nil { return err }
+
+			_, freePtrs, err := memory.ReadClosure(vm.currentFrame().cl.Address)
+			if err != nil { return err }
+			upvaluePtr := freePtrs[freeIndex]
+
+			valPtr, stackIdx, isOpen, err := memory.ReadUpvalue(upvaluePtr)
+			if err != nil { return err }
+
+			if isOpen {
+				valPtr = vm.stack[stackIdx]
+			}
+			if err := vm.push(valPtr); err != nil { return err }
+
+		case compiler.OpSetFree:
+			freeIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+			val, err := vm.pop()
+			if err != nil { return err }
+
+			_, freePtrs, err := memory.ReadClosure(vm.currentFrame().cl.Address)
+			if err != nil { return err }
+			upvaluePtr := freePtrs[freeIndex]
+
+			_, stackIdx, isOpen, err := memory.ReadUpvalue(upvaluePtr)
+			if err != nil { return err }
+
+			if isOpen {
+				vm.stack[stackIdx] = val
+			} else {
+				if err := memory.CloseUpvalue(upvaluePtr, val); err != nil { return err }
+			}
+
+		case compiler.OpCaptureLocal:
+			localIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+			frame := vm.currentFrame()
+			absIndex := frame.basePointer + localIndex
+
+			upvaluePtr, ok := vm.openUpvalues[absIndex]
+			if !ok {
+				var err error
+				upvaluePtr, err = memory.AllocUpvalue(absIndex)
+				if err != nil { return err }
+				vm.openUpvalues[absIndex] = upvaluePtr
+			}
+			if err := vm.push(upvaluePtr); err != nil { return err }
+
+		case compiler.OpLoadUpvalue:
+			freeIndex := int(ins[ip+1])
+			vm.currentFrame().ip += 1
+
+			_, freePtrs, err := memory.ReadClosure(vm.currentFrame().cl.Address)
+			if err != nil { return err }
+			upvaluePtr := freePtrs[freeIndex]
+			if err := vm.push(upvaluePtr); err != nil { return err }
 
 		case compiler.OpArray:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
@@ -316,6 +382,15 @@ func (vm *VM) Run() (err error) {
 
 		case compiler.OpBitNot:
 			if err := vm.executeBitNotOperator(); err != nil { return err }
+
+		case compiler.OpUpdateModule:
+			result, err := vm.pop()
+			if err != nil { return err }
+			modPtr, err := vm.pop()
+			if err != nil { return err }
+
+			if err := memory.WriteModuleExports(modPtr, result); err != nil { return err }
+			if err := vm.push(result); err != nil { return err }
 
 		case compiler.OpAnd, compiler.OpOr, compiler.OpXor, compiler.OpLShift, compiler.OpRShift:
 			if err := vm.executeBitwiseOperation(op); err != nil { return err }
@@ -403,7 +478,60 @@ func (vm *VM) executeCall(numArgs int) error {
 		return vm.executeBuiltinCall(calleePtr, numArgs)
 	}
 
+	if header.Type == memory.TagModule {
+		if numArgs != 0 {
+			return fmt.Errorf("module import takes 0 args")
+		}
+		return vm.executeModuleCall(calleePtr)
+	}
+
 	return fmt.Errorf("calling non-function")
+}
+
+func (vm *VM) executeModuleCall(modPtr memory.Ptr) error {
+	initPtr, expPtr, err := memory.ReadModule(modPtr)
+	if err != nil { return err }
+
+	// 1. Check if Loaded
+	if expPtr != memory.NilPtr {
+		// Loaded. Replace Module on stack with Exports.
+		vm.sp-- // Pop Module
+		return vm.push(expPtr)
+	}
+
+	// 2. Mark Loading (using Null as placeholder)
+	memory.WriteModuleExports(modPtr, NullPtr)
+
+	// 3. Prepare Trampoline
+	// Bytecode: OpLoadLocal(0), 0, OpLoadLocal(0), 1, OpCall, 0, OpUpdateModule, OpReturnValue
+	// Hex: 13 00 13 01 40 00 50 42
+	instr := []byte{
+		byte(compiler.OpLoadLocal), 0,
+		byte(compiler.OpLoadLocal), 1,
+		byte(compiler.OpCall), 0,
+		byte(compiler.OpUpdateModule),
+		byte(compiler.OpReturnValue),
+	}
+
+	trampPtr, err := memory.AllocCompiledFunction(instr, 0, 2) // 2 params
+	if err != nil { return err }
+
+	clPtr, err := memory.AllocClosure(trampPtr, nil)
+	if err != nil { return err }
+
+	// Replace Module with Trampoline Closure
+	vm.stack[vm.sp-1] = clPtr
+
+	// Wrap InitFn in Closure
+	initClPtr, err := memory.AllocClosure(initPtr, nil)
+	if err != nil { return err }
+
+	// Push Args (Module, InitClosure)
+	if err := vm.push(modPtr); err != nil { return err }
+	if err := vm.push(initClPtr); err != nil { return err }
+
+	// Execute Trampoline (2 args)
+	return vm.executeCall(2)
 }
 
 func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
@@ -555,6 +683,7 @@ func GlobalRootProvider() []*memory.Ptr {
 	// Global constants
 	if TruePtr != memory.NilPtr { roots = append(roots, &TruePtr) }
 	if FalsePtr != memory.NilPtr { roots = append(roots, &FalsePtr) }
+	if NullPtr != memory.NilPtr { roots = append(roots, &NullPtr) }
 
 	// Scheduler Roots
 	if scheduler.Global != nil && scheduler.Global.Queue != nil {
@@ -580,6 +709,8 @@ func GlobalRootProvider() []*memory.Ptr {
 			case *object.String: roots = append(roots, &val.Address)
 			case *object.CompiledFunction: roots = append(roots, &val.Address)
 			case *object.Null: roots = append(roots, &val.Address)
+			case *object.Module:
+				roots = append(roots, &val.Address)
 			}
 		}
 		return true
@@ -618,6 +749,7 @@ func (vm *VM) GetRoots() []*memory.Ptr {
 		case *object.String: roots = append(roots, &val.Address)
 		case *object.CompiledFunction: roots = append(roots, &val.Address)
 		case *object.Null: roots = append(roots, &val.Address)
+		case *object.Module: roots = append(roots, &val.Address)
 		// Add others if needed
 		}
 	}
@@ -631,4 +763,16 @@ func (vm *VM) GetRoots() []*memory.Ptr {
 	}
 
 	return roots
+}
+
+func (vm *VM) closeUpvalues(limit int) {
+	for idx, uvPtr := range vm.openUpvalues {
+		if idx >= limit {
+			val := vm.stack[idx]
+			if err := memory.CloseUpvalue(uvPtr, val); err != nil {
+				panic(err)
+			}
+			delete(vm.openUpvalues, idx)
+		}
+	}
 }

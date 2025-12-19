@@ -256,6 +256,31 @@ Hint: Binary operators require spaces: a + b
 
 ---
 
+## Module System Protocol
+
+### Import Behavior
+
+**Morph uses a Runtime Module System with Caching.**
+
+1. **Syntax:** `mod = ambil "path/to/file"`
+2. **Resolution:**
+   - Relative paths are relative to the CWD.
+   - `.fox` extension is optional.
+3. **Caching:**
+   - Modules are cached by resolved path.
+   - Subsequent imports return the cached Module object.
+4. **Circular Imports:**
+   - **Supported.**
+   - If `A` imports `B`, and `B` imports `A`:
+     - `A` starts loading.
+     - `B` starts loading.
+     - `B` imports `A`. Since `A` is loading, it returns `kosong` (Null).
+     - `B` continues execution.
+     - `A` resumes after `B` returns.
+   - **Agent Responsibility:** Agents must handle potential `kosong` return from `ambil` if circularity is possible.
+
+---
+
 ## Context Management
 
 ### Context File Format (.fox.vz)

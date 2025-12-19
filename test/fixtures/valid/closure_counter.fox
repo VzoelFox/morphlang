@@ -1,0 +1,15 @@
+# EXPECT: 1
+# EXPECT: 2
+# EXPECT: 3
+fungsi pembuat_counter()
+  i = 0
+  kembalikan fungsi()
+    i = i + 1
+    kembalikan i
+  akhir
+akhir
+
+c = pembuat_counter()
+cetak(c())
+cetak(c())
+cetak(c())

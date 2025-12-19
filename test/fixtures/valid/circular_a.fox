@@ -1,0 +1,3 @@
+ambil "circular_b"
+cetak("A loaded")
+kembalikan "A"
