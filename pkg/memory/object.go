@@ -24,7 +24,8 @@ const (
 	TagPointer  TypeTag = 14
 	TagModule   TypeTag = 15
 	TagUpvalue  TypeTag = 16
-	// ... add others later
+	TagStruct   TypeTag = 17
+	TagSchema   TypeTag = 18
 )
 
 // Header is the metadata for every object in our heap.

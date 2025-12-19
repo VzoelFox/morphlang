@@ -339,6 +339,22 @@ func (vm *VM) Run() (err error) {
 			upvaluePtr := freePtrs[freeIndex]
 			if err := vm.push(upvaluePtr); err != nil { return err }
 
+		case compiler.OpStruct:
+			nameIndex := compiler.ReadUint16(ins[ip+1:])
+			fieldCount := int(compiler.ReadUint16(ins[ip+3:]))
+			vm.currentFrame().ip += 4
+
+			nameObj := vm.constants[nameIndex]
+			namePtr := getObjectAddress(nameObj)
+
+			fieldsPtr, err := vm.buildArray(vm.sp-fieldCount, vm.sp)
+			if err != nil { return err }
+			vm.sp -= fieldCount
+
+			ptr, err := memory.AllocSchema(namePtr, fieldsPtr)
+			if err != nil { return err }
+			if err := vm.push(ptr); err != nil { return err }
+
 		case compiler.OpArray:
 			numElements := int(compiler.ReadUint16(ins[ip+1:]))
 			vm.currentFrame().ip += 2
@@ -489,7 +505,34 @@ func (vm *VM) executeCall(numArgs int) error {
 		return vm.executeModuleCall(calleePtr)
 	}
 
+	if header.Type == memory.TagSchema {
+		return vm.executeSchemaCall(calleePtr, numArgs)
+	}
+
 	return fmt.Errorf("calling non-function")
+}
+
+func (vm *VM) executeSchemaCall(schemaPtr memory.Ptr, numArgs int) error {
+	_, fieldsPtr, err := memory.ReadSchema(schemaPtr)
+	if err != nil { return err }
+
+	length, err := memory.ReadArrayLength(fieldsPtr)
+	if err != nil { return err }
+
+	if numArgs != length {
+		return fmt.Errorf("struct init arg mismatch: want %d, got %d", length, numArgs)
+	}
+
+	structPtr, err := memory.AllocStruct(schemaPtr, numArgs)
+	if err != nil { return err }
+
+	for i := numArgs - 1; i >= 0; i-- {
+		valPtr := vm.stack[vm.sp-1]
+		vm.sp--
+		memory.WriteStructField(structPtr, i, valPtr)
+	}
+	vm.sp-- // Pop Schema
+	return vm.push(structPtr)
 }
 
 func (vm *VM) executeModuleCall(modPtr memory.Ptr) error {

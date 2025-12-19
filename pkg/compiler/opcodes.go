@@ -22,6 +22,7 @@ const (
 	OpHash  Opcode = 0x1B
 	OpIndex Opcode = 0x1C
 	OpSetIndex Opcode = 0x1D
+	OpStruct   Opcode = 0x1E
 
 	// Arithmetic & Logic
 	OpAdd Opcode = 0x20
@@ -79,6 +80,7 @@ var definitions = map[Opcode]*Definition{
 	OpHash:        {"OpHash", []int{2}}, // u16 pair count (keys + values)
 	OpIndex:       {"OpIndex", []int{}},
 	OpSetIndex:    {"OpSetIndex", []int{}},
+	OpStruct:      {"OpStruct", []int{2, 2}},
 	OpAdd:         {"OpAdd", []int{}},
 	OpSub:         {"OpSub", []int{}},
 	OpMul:         {"OpMul", []int{}},

@@ -348,6 +348,26 @@ func (rs *ReturnStatement) String() string {
 	return out.String()
 }
 
+type StructStatement struct {
+	Token  lexer.Token // The 'struktur' token
+	Name   *Identifier
+	Fields []*Identifier
+}
+
+func (ss *StructStatement) statementNode()       {}
+func (ss *StructStatement) TokenLiteral() string { return ss.Token.Literal }
+func (ss *StructStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("struktur ")
+	out.WriteString(ss.Name.String())
+	out.WriteString("\n")
+	for _, f := range ss.Fields {
+		out.WriteString("  " + f.String() + "\n")
+	}
+	out.WriteString("akhir")
+	return out.String()
+}
+
 type BreakStatement struct {
 	Token lexer.Token
 }

@@ -557,6 +557,25 @@ func (c *Compiler) Compile(node parser.Node) error {
 			c.emit(OpPop)
 		}
 
+	case *parser.StructStatement:
+		for _, field := range node.Fields {
+			str := object.NewString(field.Value)
+			idx := c.addConstant(str)
+			c.emit(OpLoadConst, idx)
+		}
+
+		nameStr := object.NewString(node.Name.Value)
+		nameIdx := c.addConstant(nameStr)
+
+		c.emit(OpStruct, nameIdx, len(node.Fields))
+
+		symbol := c.symbolTable.Define(node.Name.Value)
+		if symbol.Scope == GlobalScope {
+			c.emit(OpStoreGlobal, symbol.Index)
+		} else {
+			c.emit(OpStoreLocal, symbol.Index)
+		}
+
 	case *parser.FunctionLiteral:
 		c.EnterScope()
 

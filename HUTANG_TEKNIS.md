@@ -16,14 +16,14 @@ Perbaikan signifikan telah diterapkan (20 Des 2025):
 - **Hasil:** Eliminasi alokasi Go wrapper di hot-path VM loop. Double GC pressure berkurang drastis.
 
 ## 2. Struktur Data (Missing Structs)
-**Status:** HIGH
-**Lokasi:** `pkg/object/object.go`
+**Status:** FIXED (Structs Implemented)
+**Lokasi:** `pkg/memory`, `pkg/vm`, `pkg/compiler`
 
-- **Masalah:** Tidak ada tipe `Struct`. Pengguna dipaksa menggunakan `Hash` untuk struktur data kompleks.
-- **Dampak:**
-  - **Performa:** Akses field `Hash` memerlukan hashing key (lambat) vs akses indeks offset pada `Struct` (cepat).
-  - **Type Safety:** Tidak ada jaminan struktur field pada Hash.
-- **Rekomendasi:** Implementasi `OpNewStruct` dan `OpGetField` yang menggunakan layout memori tetap (seperti Array namun dengan field bernama).
+Fitur `Struct` telah diimplementasikan (20 Des 2025):
+- **Syntax:** `struktur Nama { field }` dan `Nama(val)`.
+- **Memory:** `AllocSchema` dan `AllocStruct` dengan layout tetap.
+- **VM:** `OpStruct` untuk definisi, `OpCall` (Schema) untuk instansiasi, dan `OpIndex` (Struct) untuk akses field.
+- **Hasil:** Struktur data berkinerja tinggi dengan offset-based field access (via Schema lookup).
 
 ## 3. Tooling Debt (Analyzer / Context Generator)
 **Status:** IMPROVED (Type Inference & Error Logic Added)
