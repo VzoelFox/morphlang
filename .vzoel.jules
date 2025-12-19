@@ -61,5 +61,14 @@
     "context_hash": "",
     "prev_hash": "e5f67890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12",
     "hash": "f6g7h8i9j01234567890abcdef1234567890abcdef1234567890abcdef123456"
+  },
+  {
+    "index": 7,
+    "timestamp": "2025-12-18T23:00:00.000000000Z",
+    "user": "Stabilize Tests",
+    "assistant": "Diagnosed and fixed `TestConcurrencyScaffolding` deadlock caused by offset mismatch in `pkg/scheduler/queue.go` (Array data offset was 16, should be 24 due to Header size increase). Stabilized all tests. Removed debug logs.",
+    "context_hash": "",
+    "prev_hash": "f6g7h8i9j01234567890abcdef1234567890abcdef1234567890abcdef123456",
+    "hash": "1a2b3c4d5e6f7g8h9i0j1234567890abcdef1234567890abcdef1234567890ab"
   }
 ]
