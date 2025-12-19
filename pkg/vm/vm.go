@@ -87,6 +87,13 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 	if len(memory.Lemari.Drawers) == 0 {
 		memory.InitCabinet()
+		// Re-allocate global constants as RAM was wiped
+		True = object.NewBoolean(true)
+		False = object.NewBoolean(false)
+		Null = object.NewNull()
+		TruePtr = True.Address
+		FalsePtr = False.Address
+		NullPtr = Null.Address
 	}
 
 	bootstrapOnce.Do(func() {
@@ -95,6 +102,9 @@ func New(bytecode *compiler.Bytecode) *VM {
 		}
 		if FalsePtr == 0 {
 			FalsePtr = False.Address
+		}
+		if NullPtr == 0 {
+			NullPtr = Null.Address
 		}
 		memory.Lemari.RootProvider = GlobalRootProvider
 		memory.Lemari.GCTrigger = TriggerGC
@@ -317,6 +327,15 @@ func (vm *VM) Run() (err error) {
 		case compiler.OpBitNot:
 			if err := vm.executeBitNotOperator(); err != nil { return err }
 
+		case compiler.OpUpdateModule:
+			result, err := vm.pop()
+			if err != nil { return err }
+			modPtr, err := vm.pop()
+			if err != nil { return err }
+
+			if err := memory.WriteModuleExports(modPtr, result); err != nil { return err }
+			if err := vm.push(result); err != nil { return err }
+
 		case compiler.OpAnd, compiler.OpOr, compiler.OpXor, compiler.OpLShift, compiler.OpRShift:
 			if err := vm.executeBitwiseOperation(op); err != nil { return err }
 
@@ -403,7 +422,60 @@ func (vm *VM) executeCall(numArgs int) error {
 		return vm.executeBuiltinCall(calleePtr, numArgs)
 	}
 
+	if header.Type == memory.TagModule {
+		if numArgs != 0 {
+			return fmt.Errorf("module import takes 0 args")
+		}
+		return vm.executeModuleCall(calleePtr)
+	}
+
 	return fmt.Errorf("calling non-function")
+}
+
+func (vm *VM) executeModuleCall(modPtr memory.Ptr) error {
+	initPtr, expPtr, err := memory.ReadModule(modPtr)
+	if err != nil { return err }
+
+	// 1. Check if Loaded
+	if expPtr != memory.NilPtr {
+		// Loaded. Replace Module on stack with Exports.
+		vm.sp-- // Pop Module
+		return vm.push(expPtr)
+	}
+
+	// 2. Mark Loading (using Null as placeholder)
+	memory.WriteModuleExports(modPtr, NullPtr)
+
+	// 3. Prepare Trampoline
+	// Bytecode: OpLoadLocal(0), 0, OpLoadLocal(0), 1, OpCall, 0, OpUpdateModule, OpReturnValue
+	// Hex: 13 00 13 01 40 00 50 42
+	instr := []byte{
+		byte(compiler.OpLoadLocal), 0,
+		byte(compiler.OpLoadLocal), 1,
+		byte(compiler.OpCall), 0,
+		byte(compiler.OpUpdateModule),
+		byte(compiler.OpReturnValue),
+	}
+
+	trampPtr, err := memory.AllocCompiledFunction(instr, 0, 2) // 2 params
+	if err != nil { return err }
+
+	clPtr, err := memory.AllocClosure(trampPtr, nil)
+	if err != nil { return err }
+
+	// Replace Module with Trampoline Closure
+	vm.stack[vm.sp-1] = clPtr
+
+	// Wrap InitFn in Closure
+	initClPtr, err := memory.AllocClosure(initPtr, nil)
+	if err != nil { return err }
+
+	// Push Args (Module, InitClosure)
+	if err := vm.push(modPtr); err != nil { return err }
+	if err := vm.push(initClPtr); err != nil { return err }
+
+	// Execute Trampoline (2 args)
+	return vm.executeCall(2)
 }
 
 func (vm *VM) executeBuiltinCall(builtinPtr memory.Ptr, numArgs int) error {
@@ -555,6 +627,7 @@ func GlobalRootProvider() []*memory.Ptr {
 	// Global constants
 	if TruePtr != memory.NilPtr { roots = append(roots, &TruePtr) }
 	if FalsePtr != memory.NilPtr { roots = append(roots, &FalsePtr) }
+	if NullPtr != memory.NilPtr { roots = append(roots, &NullPtr) }
 
 	// Scheduler Roots
 	if scheduler.Global != nil && scheduler.Global.Queue != nil {
@@ -580,6 +653,8 @@ func GlobalRootProvider() []*memory.Ptr {
 			case *object.String: roots = append(roots, &val.Address)
 			case *object.CompiledFunction: roots = append(roots, &val.Address)
 			case *object.Null: roots = append(roots, &val.Address)
+			case *object.Module:
+				roots = append(roots, &val.Address)
 			}
 		}
 		return true
@@ -618,6 +693,7 @@ func (vm *VM) GetRoots() []*memory.Ptr {
 		case *object.String: roots = append(roots, &val.Address)
 		case *object.CompiledFunction: roots = append(roots, &val.Address)
 		case *object.Null: roots = append(roots, &val.Address)
+		case *object.Module: roots = append(roots, &val.Address)
 		// Add others if needed
 		}
 	}

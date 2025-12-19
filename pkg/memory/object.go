@@ -22,6 +22,7 @@ const (
 	TagError   TypeTag = 12
 	TagResource TypeTag = 13
 	TagPointer  TypeTag = 14
+	TagModule   TypeTag = 15
 	// ... add others later
 )
 

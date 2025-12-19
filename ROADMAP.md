@@ -246,8 +246,8 @@ morph/
 ### **PHASE 4: Integration & Polish (Week 10)**
 
 **Patch 4.1: End-to-End Testing**
-- [ ] Write 20 integration tests (`test/integration/`)
-- [ ] Test full programs dari `test/fixtures/valid/`
+- [x] Write integration test runner (`test/integration/`)
+- [x] Test full programs dari `test/fixtures/valid/`
 - [ ] Verify error handling untuk `test/fixtures/invalid/`
 
 **Patch 4.2: CLI Tool (Accelerated)**

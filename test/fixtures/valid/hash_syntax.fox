@@ -1,0 +1,6 @@
+# EXPECT: Alice
+orang = {
+  nama: "Alice",
+  umur: 25
+}
+cetak(orang.nama)
