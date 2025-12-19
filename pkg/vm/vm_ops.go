@@ -258,6 +258,23 @@ func (vm *VM) executeIndexExpression(left, index memory.Ptr) error {
 		return vm.push(NullPtr)
 	}
 
+	if header.Type == memory.TagString {
+		idx, err := memory.ReadInteger(index)
+		if err != nil { return fmt.Errorf("string index must be integer") }
+
+		str, err := memory.ReadString(left)
+		if err != nil { return err }
+
+		if idx < 0 || int(idx) >= len(str) {
+			return vm.push(NullPtr)
+		}
+
+		charStr := string(str[idx])
+		ptr, err := memory.AllocString(charStr)
+		if err != nil { return err }
+		return vm.push(ptr)
+	}
+
 	return fmt.Errorf("index not supported for type tag %d", header.Type)
 }
 
