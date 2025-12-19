@@ -1,0 +1,6 @@
+# EXPECT: B loaded
+# EXPECT: A loaded
+# EXPECT: Result: A
+
+ambil "circular_a"
+cetak("Result: #{circular_a}")

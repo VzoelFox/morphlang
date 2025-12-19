@@ -117,6 +117,8 @@ func (c *Compiler) Compile(node parser.Node) error {
 
 			if symbol.Scope == GlobalScope {
 				c.emit(OpStoreGlobal, symbol.Index)
+			} else if symbol.Scope == FreeScope {
+				c.emit(OpSetFree, symbol.Index)
 			} else {
 				c.emit(OpStoreLocal, symbol.Index)
 			}
